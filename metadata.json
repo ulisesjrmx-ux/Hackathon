@@ -1,0 +1,6 @@
+{
+  "name": "Horizonte Orbital",
+  "description": "Juego espacial de exploración y rescate de datos en la Luna y Marte con radar táctico, bitácora de misión y animación de despegue interplanetario.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

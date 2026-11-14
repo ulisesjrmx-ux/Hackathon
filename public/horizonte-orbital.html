@@ -1,0 +1,3605 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Horizonte Orbital — Juego Espacial HTML</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-main: #07090e;
+        --bg-panel: #0e131d;
+        --bg-card: #0b0f18;
+        --bg-inset: #080c14;
+        --border: #1e293b;
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --cyan: #06b6d4;
+        --cyan-light: #22d3ee;
+        --amber: #f59e0b;
+        --amber-light: #fbbf24;
+        --emerald: #10b981;
+        --font-display: 'Chakra Petch', system-ui, sans-serif;
+        --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background: var(--bg-main);
+        color: var(--text-main);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .app-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+      }
+
+      /* Top Bar (3 zones) */
+      .topbar {
+        height: 56px;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--border);
+        background: #0b0f17;
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: #f8fafc;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .topbar-metrics {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 12px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .metric-mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        color: #e2e8f0;
+      }
+
+      .planet-label-moon {
+        color: var(--cyan-light);
+        font-weight: 600;
+      }
+
+      .planet-label-mars {
+        color: var(--amber-light);
+        font-weight: 600;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 7px 12px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #0f172a;
+        color: #e2e8f0;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+      }
+
+      .btn:hover {
+        background: #1e293b;
+        color: #ffffff;
+      }
+
+      .btn-primary-cyan {
+        background: var(--cyan);
+        border-color: var(--cyan);
+        color: #020617;
+      }
+
+      .btn-primary-cyan:hover {
+        background: var(--cyan-light);
+        border-color: var(--cyan-light);
+        color: #020617;
+      }
+
+      .btn-primary-amber {
+        background: var(--amber);
+        border-color: var(--amber);
+        color: #020617;
+      }
+
+      .btn-primary-amber:hover {
+        background: var(--amber-light);
+        border-color: var(--amber-light);
+        color: #020617;
+      }
+
+      .btn:disabled {
+        background: rgba(30, 41, 59, 0.7);
+        border-color: var(--border);
+        color: #64748b;
+        cursor: not-allowed;
+      }
+
+      /* Main Layout */
+      .workspace {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: row;
+      }
+
+      .stage {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 360px;
+        background: #05070b;
+        overflow: hidden;
+      }
+
+      #gameCanvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+        touch-action: none;
+      }
+
+      /* Floating HUD overlays */
+      .hud-sector {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        pointer-events: none;
+        background: rgba(11, 15, 23, 0.9);
+        border: 1px solid rgba(30, 41, 59, 0.9);
+        border-radius: 8px;
+        padding: 9px 12px;
+      }
+
+      .hud-sector-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #f1f5f9;
+      }
+
+      .hud-sector-sub {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .boost-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .boost-track {
+        width: 112px;
+        height: 6px;
+        background: #1e293b;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .boost-fill {
+        height: 100%;
+        width: 100%;
+        background: var(--cyan-light);
+        transition: width 0.1s linear;
+      }
+
+      .hud-controls-hint {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        pointer-events: none;
+        background: rgba(11, 15, 23, 0.85);
+        border: 1px solid rgba(30, 41, 59, 0.8);
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 11px;
+        color: #cbd5e1;
+      }
+
+      /* Toast */
+      .toast {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        max-width: 360px;
+        background: rgba(14, 19, 29, 0.96);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        border-radius: 8px;
+        padding: 13px 14px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+      }
+
+      .toast-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #34d399;
+      }
+
+      .toast-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin-top: 5px;
+      }
+
+      .toast-reading {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+      }
+
+      .toast-link {
+        margin-top: 8px;
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--cyan-light);
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      /* Launch Banner (clear of bottom-right minimap) */
+      .launch-banner {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        width: min(calc(100% - 224px), 448px);
+        background: rgba(14, 19, 29, 0.96);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 13px 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
+      }
+
+      /* Floating Probe Radar Minimap */
+      .minimap-box {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        pointer-events: none;
+        background: rgba(11, 15, 23, 0.92);
+        border: 1px solid rgba(30, 41, 59, 0.9);
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+      }
+
+      .minimap-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+
+      .minimap-title {
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+
+      .minimap-info {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 10px;
+        color: #94a3b8;
+        margin-top: 6px;
+        max-width: 182px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .launch-banner-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #34d399;
+      }
+
+      .launch-banner-sub {
+        font-size: 12px;
+        color: #cbd5e1;
+        margin-top: 2px;
+      }
+
+      /* Transition Progress Overlay */
+      .transition-overlay {
+        position: absolute;
+        inset: auto 16px 24px 16px;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      .transition-box {
+        width: 100%;
+        max-width: 440px;
+        background: rgba(11, 15, 23, 0.92);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 16px;
+      }
+
+      .transition-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .transition-stage {
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: #f8fafc;
+      }
+
+      .transition-track {
+        width: 100%;
+        height: 8px;
+        background: #1e293b;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .transition-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #22d3ee, #fbbf24);
+      }
+
+      .transition-meta {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 8px;
+      }
+
+      /* Modals (Menu & Victory) */
+      .modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(7, 9, 14, 0.86);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+
+      .modal-card {
+        width: 100%;
+        max-width: 500px;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .modal-kicker {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--cyan-light);
+      }
+
+      .modal-title {
+        font-family: var(--font-display);
+        font-size: 28px;
+        font-weight: 700;
+        color: #f8fafc;
+        margin: 4px 0 0 0;
+      }
+
+      .modal-desc {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #cbd5e1;
+        margin: 8px 0 0 0;
+      }
+
+      .planet-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .planet-option {
+        text-align: left;
+        padding: 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+
+      .planet-option.selected-moon {
+        border-color: var(--cyan);
+        background: rgba(8, 51, 68, 0.38);
+        color: #f1f5f9;
+      }
+
+      .planet-option.selected-mars {
+        border-color: var(--amber);
+        background: rgba(69, 26, 3, 0.38);
+        color: #f1f5f9;
+      }
+
+      .planet-option-name {
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      .planet-option-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 3px;
+      }
+
+      /* Right Tactical Sidebar */
+      .sidebar {
+        width: 400px;
+        flex-shrink: 0;
+        border-left: 1px solid var(--border);
+        background: var(--bg-panel);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .tabs-wrap {
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+
+      .segmented {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        background: var(--bg-inset);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .seg-btn {
+        flex: 1;
+        padding: 8px 10px;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .seg-btn.active {
+        background: #1e293b;
+        color: #f8fafc;
+      }
+
+      .sidebar-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .sidebar-body::-webkit-scrollbar {
+        width: 5px;
+      }
+      .sidebar-body::-webkit-scrollbar-track {
+        background: #0b0f17;
+      }
+      .sidebar-body::-webkit-scrollbar-thumb {
+        background: #243044;
+        border-radius: 3px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .section-title {
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin: 0;
+      }
+
+      .section-count {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .radar-box {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+      }
+
+      #radarCanvas {
+        display: block;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      .radar-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .radar-label {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .radar-val {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        color: #e2e8f0;
+        margin-top: 2px;
+      }
+
+      .divider {
+        height: 1px;
+        background: rgba(30, 41, 59, 0.8);
+      }
+
+      .checklist {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-card);
+        overflow: hidden;
+      }
+
+      .check-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(30, 41, 59, 0.7);
+        font-size: 12px;
+      }
+
+      .check-item:last-child {
+        border-bottom: none;
+      }
+
+      .check-name {
+        font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .diamond-dot {
+        width: 7px;
+        height: 7px;
+        transform: rotate(45deg);
+        background: var(--cyan-light);
+        display: inline-block;
+        flex-shrink: 0;
+      }
+
+      .diamond-dot.mars {
+        background: var(--amber-light);
+      }
+
+      .check-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        padding-left: 14px;
+        margin-top: 2px;
+      }
+
+      .check-dist {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: #cbd5e1;
+        white-space: nowrap;
+      }
+
+      .check-done {
+        color: #34d399;
+        font-weight: 600;
+      }
+
+      .propulsion-box {
+        margin-top: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-card);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .log-card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-card);
+        padding: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .log-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .log-obj {
+        font-size: 12px;
+        font-weight: 600;
+        color: #f1f5f9;
+      }
+
+      .log-status {
+        font-size: 11px;
+        font-weight: 600;
+        color: #34d399;
+        white-space: nowrap;
+      }
+
+      .log-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .log-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-top: 2px;
+      }
+
+      .log-summary {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      .log-foot {
+        padding-top: 7px;
+        border-top: 1px solid rgba(30, 41, 59, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 1024px) {
+        .workspace {
+          flex-direction: column;
+        }
+        .sidebar {
+          width: 100%;
+          border-left: none;
+          border-top: 1px solid var(--border);
+          max-height: 44vh;
+        }
+        .topbar-metrics {
+          display: none;
+        }
+        .hud-controls-hint {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">Horizonte Orbital</div>
+
+        <div class="topbar-metrics">
+          <span id="topPlanetName" class="planet-label-moon">La Luna</span>
+          <span aria-hidden="true">·</span>
+          <span class="metric-mono">Puntos: <span id="topScore">0</span></span>
+          <span aria-hidden="true">·</span>
+          <span class="metric-mono">Rescatados: <span id="topRescued">0</span>/4</span>
+          <span aria-hidden="true">·</span>
+          <span class="metric-mono">Bitácora: <span id="topTotalLog">0</span>/8</span>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="btnMute" type="button" class="btn">Audio</button>
+          <button id="btnReset" type="button" class="btn">Reiniciar</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="stage">
+          <canvas id="gameCanvas"></canvas>
+
+          <div id="hudSector" class="hud-sector hidden">
+            <div id="hudSectorTitle" class="hud-sector-title">La Luna · Mare Tranquillitatis</div>
+            <div id="hudSectorSub" class="hud-sector-sub">Gravedad 1.62 m/s² · Temp -130 °C</div>
+            <div class="boost-row">
+              <span style="font-size:11px;color:#34d399;font-weight:600;min-width:58px;">Casco</span>
+              <div class="boost-track">
+                <div id="hullFill" class="boost-fill" style="background:#34d399;"></div>
+              </div>
+              <span id="hullLabel" class="metric-mono" style="font-size:11px;">100%</span>
+            </div>
+            <div class="boost-row" style="margin-top:5px;">
+              <span style="font-size:11px;color:#fbbf24;font-weight:600;min-width:58px;">Propulsor</span>
+              <div class="boost-track">
+                <div id="boostFill" class="boost-fill"></div>
+              </div>
+              <span id="boostLabel" class="metric-mono" style="font-size:11px;">100%</span>
+            </div>
+          </div>
+
+          <div id="hudHint" class="hud-controls-hint hidden">
+            WASD o Flechas para volar · Mantén clic para dirigir · Espacio para turbo
+          </div>
+
+          <div id="toastBox" class="toast hidden">
+            <div class="toast-head">
+              <span id="toastHeader">Información recibida</span>
+              <span id="toastPoints" class="metric-mono">+250 pts</span>
+            </div>
+            <div id="toastSubtitle" class="toast-title"></div>
+            <div id="toastReading" class="toast-reading"></div>
+            <button id="btnToastLog" type="button" class="toast-link">Ver registro en Bitácora</button>
+          </div>
+
+          <div id="minimapBox" class="minimap-box hidden">
+            <div class="minimap-head">
+              <span class="minimap-title">Radar de Sondas</span>
+              <span id="minimapCounter" class="metric-mono" style="font-size:11px;color:#94a3b8;">0/4</span>
+            </div>
+            <canvas
+              id="minimapCanvas"
+              width="182"
+              height="154"
+              style="display:block;border-radius:4px;border:1px solid rgba(30,41,59,0.8);"
+            ></canvas>
+            <div id="minimapInfo" class="minimap-info">Escaneando sector...</div>
+          </div>
+
+          <div id="launchBanner" class="launch-banner hidden">
+            <div>
+              <div id="launchBannerTitle" class="launch-banner-title">
+                Misión en La Luna completada (4/4 objetos)
+              </div>
+              <div id="launchBannerSub" class="launch-banner-sub">
+                Propulsores listos para despegar hacia Marte.
+              </div>
+            </div>
+            <button id="btnLaunchBanner" type="button" class="btn btn-primary-amber">
+              Despegar hacia Marte
+            </button>
+          </div>
+
+          <div id="transitionOverlay" class="transition-overlay hidden">
+            <div class="transition-box">
+              <div class="transition-row">
+                <span id="transitionStage" class="transition-stage">Ignición de Propulsores</span>
+                <span id="transitionPercent" class="metric-mono" style="color:#fbbf24;">0%</span>
+              </div>
+              <div class="transition-track">
+                <div id="transitionFill" class="transition-fill"></div>
+              </div>
+              <div class="transition-meta">
+                <span id="transitionFrom">Origen: La Luna</span>
+                <span id="transitionTo">Destino: Marte</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Start Menu Modal -->
+          <div id="menuModal" class="modal-backdrop">
+            <div class="modal-card">
+              <div>
+                <div class="modal-kicker">Exploración y Rescate de Datos</div>
+                <h1 class="modal-title">Horizonte Orbital</h1>
+                <p class="modal-desc">
+                  Pilota tu nave espacial sobre la superficie planetaria, recolecta cristales de energía y utiliza el radar táctico para localizar 4 objetos científicos que transmitirán su información hacia tu bitácora.
+                </p>
+              </div>
+
+              <div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">
+                  Elige tu destino inicial
+                </div>
+                <div class="planet-grid">
+                  <button id="optMoon" type="button" class="planet-option selected-moon">
+                    <div class="planet-option-name">La Luna</div>
+                    <div class="planet-option-sub">Mare Tranquillitatis · 4 objetos</div>
+                  </button>
+                  <button id="optMars" type="button" class="planet-option">
+                    <div class="planet-option-name">Marte</div>
+                    <div class="planet-option-sub">Cráter Jezero · 4 objetos</div>
+                  </button>
+                </div>
+              </div>
+
+              <div style="font-size:12px;color:#94a3b8;border-top:1px solid #1e293b;padding-top:12px;">
+                Controles: WASD / Flechas · Clic sostenido para volar · Espacio: Propulsor
+              </div>
+
+              <button id="btnStart" type="button" class="btn btn-primary-cyan" style="padding:12px 16px;font-size:14px;">
+                Comenzar Misión
+              </button>
+            </div>
+          </div>
+
+          <!-- Victory Modal -->
+          <div id="victoryModal" class="modal-backdrop hidden">
+            <div class="modal-card" style="border-color:rgba(16,185,129,0.45);">
+              <div>
+                <div class="modal-kicker" style="color:#34d399;">Misión Interplanetaria Completada</div>
+                <h2 class="modal-title" style="font-size:24px;">Todos los datos rescatados</h2>
+                <p class="modal-desc">
+                  Has recuperado la información de los 4 objetos de La Luna y los 4 objetos de Marte. Todos los reportes científicos están archivados en tu bitácora.
+                </p>
+              </div>
+
+              <div class="planet-grid">
+                <div class="planet-option" style="cursor:default;">
+                  <div style="font-size:12px;color:#94a3b8;">Puntuación Final</div>
+                  <div id="victoryScore" class="metric-mono" style="font-size:20px;font-weight:700;margin-top:4px;">0</div>
+                </div>
+                <div class="planet-option" style="cursor:default;">
+                  <div style="font-size:12px;color:#94a3b8;">Bitácora</div>
+                  <div class="metric-mono" style="font-size:20px;font-weight:700;color:#34d399;margin-top:4px;">8/8</div>
+                </div>
+              </div>
+
+              <div class="planet-grid">
+                <button id="btnKeepPlaying" type="button" class="btn" style="padding:10px 14px;">
+                  Seguir Explorando
+                </button>
+                <button id="btnRestartVictory" type="button" class="btn btn-primary-cyan" style="padding:10px 14px;">
+                  Nueva Misión
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hull Critical / Emergency Repair Modal -->
+          <div id="destroyedModal" class="modal-backdrop hidden">
+            <div class="modal-card" style="border-color:rgba(239,68,68,0.45);max-width:440px;">
+              <div>
+                <div class="modal-kicker" style="color:#f87171;">Impacto de Asteroide · Casco Crítico</div>
+                <h2 class="modal-title" style="font-size:24px;">Nave Averiada</h2>
+                <p class="modal-desc">
+                  Los asteroides de alta velocidad superaron la integridad del casco. Tus datos rescatados en la bitácora siguen a salvo.
+                </p>
+              </div>
+
+              <div class="planet-grid">
+                <button id="btnRepair" type="button" class="btn btn-primary-cyan" style="padding:10px 14px;">
+                  Reparar y Relanzar
+                </button>
+                <button id="btnRestartDestroyed" type="button" class="btn" style="padding:10px 14px;">
+                  Reiniciar Misión
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <div class="tabs-wrap">
+            <div class="segmented">
+              <button id="tabRadar" type="button" class="seg-btn active">Radar (0/4)</button>
+              <button id="tabLogbook" type="button" class="seg-btn">Bitácora (0)</button>
+            </div>
+          </div>
+
+          <div id="radarPanelBody" class="sidebar-body">
+            <div class="section-head">
+              <h2 class="section-title">Radar de Rescate</h2>
+              <span id="radarCounter" class="section-count">0/4 rescatados</span>
+            </div>
+
+            <div class="radar-box">
+              <canvas id="radarCanvas" width="152" height="152"></canvas>
+              <div class="radar-info">
+                <div>
+                  <div class="radar-label">Posición actual</div>
+                  <div id="radarCoords" class="radar-val">X:1200 · Y:900</div>
+                </div>
+                <div class="divider"></div>
+                <div>
+                  <div id="nearestLabel" class="radar-label">Señal más cercana</div>
+                  <div id="nearestName" style="font-size:12px;font-weight:600;color:#f1f5f9;margin-top:2px;">-</div>
+                  <div id="nearestDist" class="radar-val" style="color:#22d3ee;">-</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="objectChecklist" class="checklist"></div>
+
+            <div class="propulsion-box">
+              <div class="section-head">
+                <span style="font-size:12px;font-weight:600;color:#e2e8f0;">Propulsión Interplanetaria</span>
+                <span id="propulsionStatus" class="metric-mono" style="font-size:11px;color:#94a3b8;">Bloqueado</span>
+              </div>
+              <p id="propulsionDesc" style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                Rescata los 4 objetos de La Luna para habilitar el despegue hacia Marte.
+              </p>
+              <button id="btnLaunchSidebar" type="button" class="btn btn-primary-amber" disabled style="padding:10px 14px;">
+                Despegar hacia Marte
+              </button>
+            </div>
+          </div>
+
+          <div id="logbookPanelBody" class="sidebar-body hidden">
+            <div class="section-head">
+              <h2 class="section-title">Bitácora de Misión</h2>
+              <span id="logCounter" class="section-count">0/8 registros</span>
+            </div>
+
+            <div class="segmented">
+              <button data-filter="all" type="button" class="seg-btn active">Todos (0)</button>
+              <button data-filter="moon" type="button" class="seg-btn">La Luna (0)</button>
+              <button data-filter="mars" type="button" class="seg-btn">Marte (0)</button>
+            </div>
+
+            <div id="logEntriesList" style="display:flex;flex-direction:column;gap:10px;"></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        const WORLD_WIDTH = 2600;
+        const WORLD_HEIGHT = 2200;
+        const PLANET_RADIUS = 640;
+        const RESCUE_RANGE = 165;
+        const CRYSTAL_MAGNET_RANGE = 110;
+        const CRYSTAL_COLLECT_RANGE = 32;
+        const STORAGE_KEY = 'horizonte_orbital_html_v4';
+        const SHIP_IDLE_URL = '/assets/aistudio/WhatsApp_Image_2026-11-14_at_4.04.51_PM_91056862.jpeg';
+        const SHIP_THRUST_URL = '/assets/aistudio/WhatsApp_Image_2026-11-14_at_4.04.09_PM_109ec7cb.jpeg';
+        const ASTEROID_URL = '/assets/aistudio/image_ac8dfdf7.png';
+
+        const PLANETS = {
+          moon: {
+            id: 'moon',
+            name: 'La Luna',
+            sectorName: 'Mare Tranquillitatis',
+            gravityLabel: '1.62 m/s²',
+            surfaceTemp: '-130 °C',
+            surfaceBaseColor: '#161A23',
+            surfaceSecondaryColor: '#1E2430',
+            craterColor: '#0E1118',
+            craterRimColor: '#2F3748',
+            gridColor: 'rgba(148, 163, 184, 0.06)',
+            accentColor: '#06B6D4',
+            crystalColor: '#38BDF8',
+            dustColor: 'rgba(203, 213, 225, 0.45)',
+            planetSphereColors: ['#E2E8F0', '#94A3B8', '#334155'],
+            atmosphereGlow: 'rgba(148, 163, 184, 0.28)',
+            targetPlanetId: 'mars',
+            targetPlanetName: 'Marte',
+            isCircularMap: true,
+            mapRadius: PLANET_RADIUS,
+            surfaceImageUrl: '/assets/aistudio/WhatsApp_Image_2026-11-14_at_4.32.16_PM__1__ee59bea7.jpeg',
+          },
+          mars: {
+            id: 'mars',
+            name: 'Marte',
+            sectorName: 'Cráter Jezero',
+            gravityLabel: '3.72 m/s²',
+            surfaceTemp: '-63 °C',
+            surfaceBaseColor: '#27130E',
+            surfaceSecondaryColor: '#361A13',
+            craterColor: '#1A0B08',
+            craterRimColor: '#5C2C1E',
+            gridColor: 'rgba(251, 146, 60, 0.06)',
+            accentColor: '#F59E0B',
+            crystalColor: '#FBBF24',
+            dustColor: 'rgba(251, 146, 60, 0.45)',
+            planetSphereColors: ['#FDBA74', '#EA580C', '#7C2D12'],
+            atmosphereGlow: 'rgba(234, 88, 12, 0.36)',
+            targetPlanetId: 'moon',
+            targetPlanetName: 'La Luna',
+            isCircularMap: true,
+            mapRadius: PLANET_RADIUS,
+            surfaceImageUrl: '/assets/aistudio/image_65cc5da3.png',
+          },
+        };
+
+        const CX = WORLD_WIDTH / 2;
+        const CY = WORLD_HEIGHT / 2;
+
+        const INITIAL_OBJECTS = {
+          moon: [
+            {
+              id: 'moon-obj-1',
+              planet: 'moon',
+              name: 'Sonda Lunokhod-X',
+              sector: 'Borde Norte Tranquilidad',
+              orbitCenterX: CX - 40,
+              orbitCenterY: CY - 30,
+              orbitRadiusX: 340,
+              orbitRadiusY: 250,
+              orbitSpeed: 0.16,
+              orbitAngle: 3.85,
+              x: CX - 40 + Math.cos(3.85) * 340,
+              y: CY - 30 + Math.sin(3.85) * 250,
+              shape: 'rover',
+              frequency: '142.8 MHz',
+              points: 250,
+              transmissionTitle: 'Muestra de Regolito Basáltico',
+              transmissionSummary:
+                'La sonda transmitió espectros de titanio e ilmenita en el estrato superior, confirmando depósitos aprovechables para blindaje lunar.',
+              telemetryReading: 'TiO₂: 8.4% · FeO: 17.2% · Radiación: 0.38 mSv/h',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'moon-obj-2',
+              planet: 'moon',
+              name: 'Baliza Apolo-19',
+              sector: 'Cuenca Este',
+              orbitCenterX: CX + 40,
+              orbitCenterY: CY - 20,
+              orbitRadiusX: 480,
+              orbitRadiusY: 360,
+              orbitSpeed: -0.14,
+              orbitAngle: -0.65,
+              x: CX + 40 + Math.cos(-0.65) * 480,
+              y: CY - 20 + Math.sin(-0.65) * 360,
+              shape: 'beacon',
+              frequency: '218.4 MHz',
+              points: 250,
+              transmissionTitle: 'Registro de Viento Solar',
+              transmissionSummary:
+                'Baliza orbital recuperada con 400 horas de lectura de partículas alfa y flujo de Helio-3 atrapado en la superficie lunar.',
+              telemetryReading: 'He-3: 18.6 ppb · Flujo Solar: 412 km/s',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'moon-obj-3',
+              planet: 'moon',
+              name: 'Reflector Sísmico Selene',
+              sector: 'Fosa Meridional',
+              orbitCenterX: CX,
+              orbitCenterY: CY + 40,
+              orbitRadiusX: 390,
+              orbitRadiusY: 300,
+              orbitSpeed: 0.19,
+              orbitAngle: 2.35,
+              x: CX + Math.cos(2.35) * 390,
+              y: CY + 40 + Math.sin(2.35) * 300,
+              shape: 'seismic',
+              frequency: '305.1 MHz',
+              points: 250,
+              transmissionTitle: 'Actividad Tectónica Lunar',
+              transmissionSummary:
+                'Detectó tres micro-sismos lunares profundos a 850 km bajo la corteza, calibrando con precisión la estructura del manto.',
+              telemetryReading: 'Magnitud: 1.9 Mw · Profundidad: 842 km',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'moon-obj-4',
+              planet: 'moon',
+              name: 'Cápsula Criogénica Tycho',
+              sector: 'Órbita Exterior Sur',
+              orbitCenterX: CX,
+              orbitCenterY: CY,
+              orbitRadiusX: 880,
+              orbitRadiusY: 740,
+              orbitSpeed: 0.1,
+              orbitAngle: 0.72,
+              x: CX + Math.cos(0.72) * 880,
+              y: CY + Math.sin(0.72) * 740,
+              shape: 'probe',
+              frequency: '412.6 MHz',
+              points: 250,
+              transmissionTitle: 'Reserva de Hielo Subsuperficial',
+              transmissionSummary:
+                'Confirmó bolsas de hielo cristalino en micro-cráteres en sombra permanente, vital para producción de oxígeno y propelente.',
+              telemetryReading: 'H₂O Sólida: 5.7% masa · Temp: -188 °C',
+              discovered: false,
+              downloadProgress: 0,
+            },
+          ],
+          mars: [
+            {
+              id: 'mars-obj-1',
+              planet: 'mars',
+              name: 'Rover Perseverancia-IV',
+              sector: 'Delta Occidental',
+              orbitCenterX: CX - 30,
+              orbitCenterY: CY - 20,
+              orbitRadiusX: 360,
+              orbitRadiusY: 260,
+              orbitSpeed: -0.15,
+              orbitAngle: 3.7,
+              x: CX - 30 + Math.cos(3.7) * 360,
+              y: CY - 20 + Math.sin(3.7) * 260,
+              shape: 'rover',
+              frequency: '164.2 MHz',
+              points: 300,
+              transmissionTitle: 'Sedimentos Lacustres Antiguos',
+              transmissionSummary:
+                'El rover envió un perfil estratigráfico con arcillas ricas en filosilicatos que prueban corrientes de agua líquida hace 3.5 mil millones de años.',
+              telemetryReading: 'pH Paleo: 7.2 · Carbonatos: 12.1% · O₂ traza',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'mars-obj-2',
+              planet: 'mars',
+              name: 'Estación Meteo Ares-7',
+              sector: 'Llanura Óxido Norte',
+              orbitCenterX: CX + 30,
+              orbitCenterY: CY,
+              orbitRadiusX: 460,
+              orbitRadiusY: 380,
+              orbitSpeed: 0.14,
+              orbitAngle: -0.7,
+              x: CX + 30 + Math.cos(-0.7) * 460,
+              y: CY + Math.sin(-0.7) * 380,
+              shape: 'beacon',
+              frequency: '248.9 MHz',
+              points: 300,
+              transmissionTitle: 'Dinámica de Tormentas de Polvo',
+              transmissionSummary:
+                'Telemetría barométrica continua que predice frentes de polvo cargados electrostáticamente y ráfagas de hasta 94 km/h.',
+              telemetryReading: 'Presión: 6.4 mbar · CO₂: 95.3% · Viento: 68 km/h',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'mars-obj-3',
+              planet: 'mars',
+              name: 'Perforadora Subterránea Valles',
+              sector: 'Cañón Meridional',
+              orbitCenterX: CX,
+              orbitCenterY: CY + 30,
+              orbitRadiusX: 390,
+              orbitRadiusY: 300,
+              orbitSpeed: -0.18,
+              orbitAngle: 2.2,
+              x: CX + Math.cos(2.2) * 390,
+              y: CY + 30 + Math.sin(2.2) * 300,
+              shape: 'seismic',
+              frequency: '332.0 MHz',
+              points: 300,
+              transmissionTitle: 'Acuífero Salino Profundo',
+              transmissionSummary:
+                'Radar de penetración terrestre halló capas de salmuera estable a 1.4 km de profundidad protegidas de la radiación superficial.',
+              telemetryReading: 'Conductividad: 4.8 S/m · Profundidad: 1.42 km',
+              discovered: false,
+              downloadProgress: 0,
+            },
+            {
+              id: 'mars-obj-4',
+              planet: 'mars',
+              name: 'Satélite Caído Phobos-Relay',
+              sector: 'Órbita Exterior Este',
+              orbitCenterX: CX,
+              orbitCenterY: CY,
+              orbitRadiusX: 910,
+              orbitRadiusY: 750,
+              orbitSpeed: 0.105,
+              orbitAngle: 0.65,
+              x: CX + Math.cos(0.65) * 910,
+              y: CY + Math.sin(0.65) * 750,
+              shape: 'probe',
+              frequency: '449.5 MHz',
+              points: 300,
+              transmissionTitle: 'Archivo Orbital de Cartografía',
+              transmissionSummary:
+                'Caja negra recuperada con mapas topográficos de alta resolución y anomalías magnéticas de la corteza marciana.',
+              telemetryReading: 'Campo Magnético: 145 nT · Datos: 4.2 TB',
+              discovered: false,
+              downloadProgress: 0,
+            },
+          ],
+        };
+
+        function createRng(seed) {
+          let state = seed;
+          return () => {
+            state = (state * 1664525 + 1013904223) % 4294967296;
+            return state / 4294967296;
+          };
+        }
+
+        function generateCrystals(planet) {
+          const rng = createRng(planet === 'moon' ? 51203 : 74819);
+          const list = [];
+          for (let i = 0; i < 22; i++) {
+            const inOrbit = i >= 14;
+            const ang = rng() * Math.PI * 2;
+            const dist = inOrbit
+              ? PLANET_RADIUS + 80 + rng() * 260
+              : 150 + rng() * (PLANET_RADIUS - 210);
+            list.push({
+              id: `${planet}-crystal-${i}`,
+              x: CX + Math.cos(ang) * dist,
+              y: CY + Math.sin(ang) * dist,
+              value: planet === 'moon' ? 50 : 75,
+              collected: false,
+              pulseOffset: rng() * Math.PI * 2,
+            });
+          }
+          return list;
+        }
+
+        const planetSprites = { moon: null, mars: null };
+        function loadPlanetSprite(id, url) {
+          if (!url) return;
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            const maxDim = 1024;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const work = document.createElement('canvas');
+            work.width = w;
+            work.height = h;
+            const wCtx = work.getContext('2d');
+            if (!wCtx) return;
+            wCtx.drawImage(img, 0, 0, w, h);
+            try {
+              const imgData = wCtx.getImageData(0, 0, w, h);
+              const data = imgData.data;
+              const visited = new Uint8Array(w * h);
+              const queue = new Int32Array(w * h);
+              let head = 0, tail = 0;
+              const enqueue = (x, y) => {
+                if (x < 0 || x >= w || y < 0 || y >= h) return;
+                const idx = y * w + x;
+                if (visited[idx]) return;
+                const p = idx * 4;
+                if (!(data[p] > 236 && data[p + 1] > 236 && data[p + 2] > 236)) return;
+                visited[idx] = 1;
+                queue[tail++] = idx;
+              };
+              for (let x = 0; x < w; x++) { enqueue(x, 0); enqueue(x, h - 1); }
+              for (let y = 0; y < h; y++) { enqueue(0, y); enqueue(w - 1, y); }
+              while (head < tail) {
+                const idx = queue[head++];
+                data[idx * 4 + 3] = 0;
+                const x = idx % w;
+                const y = (idx - x) / w;
+                enqueue(x + 1, y); enqueue(x - 1, y); enqueue(x, y + 1); enqueue(x, y - 1);
+              }
+              let minX = w, minY = h, maxX = 0, maxY = 0;
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  if (data[(y * w + x) * 4 + 3] > 10) {
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+                  }
+                }
+              }
+              wCtx.putImageData(imgData, 0, 0);
+              const bw = Math.max(1, maxX - minX + 1);
+              const bh = Math.max(1, maxY - minY + 1);
+              const side = Math.max(bw, bh);
+              const cropped = document.createElement('canvas');
+              cropped.width = side;
+              cropped.height = side;
+              const cCtx = cropped.getContext('2d');
+              if (cCtx) {
+                cCtx.drawImage(work, minX, minY, bw, bh, (side - bw) / 2, (side - bh) / 2, bw, bh);
+                planetSprites[id] = cropped;
+              }
+            } catch {
+              const cropped = document.createElement('canvas');
+              const side = Math.min(w, h);
+              cropped.width = side;
+              cropped.height = side;
+              const cCtx = cropped.getContext('2d');
+              if (cCtx) {
+                cCtx.beginPath();
+                cCtx.arc(side / 2, side / 2, side * 0.44, 0, Math.PI * 2);
+                cCtx.clip();
+                cCtx.drawImage(work, 0, 0, side, side);
+                planetSprites[id] = cropped;
+              }
+            }
+          };
+        }
+        loadPlanetSprite('moon', PLANETS.moon.surfaceImageUrl);
+        loadPlanetSprite('mars', PLANETS.mars.surfaceImageUrl);
+
+        const shipSprites = { idle: null, moving: null };
+        function loadShipSprite(key, url) {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            const maxDim = 640;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const work = document.createElement('canvas');
+            work.width = w;
+            work.height = h;
+            const wCtx = work.getContext('2d');
+            if (!wCtx) return;
+            wCtx.drawImage(img, 0, 0, w, h);
+            let axisAngle = (78 * Math.PI) / 180;
+            let anchorX = w * 0.54;
+            let anchorY = h * 0.72;
+            let hullLen = h * 0.34;
+            try {
+              const imgData = wCtx.getImageData(0, 0, w, h);
+              const data = imgData.data;
+              const visited = new Uint8Array(w * h);
+              const queue = new Int32Array(w * h);
+              let head = 0, tail = 0;
+              const enqueue = (x, y) => {
+                if (x < 0 || x >= w || y < 0 || y >= h) return;
+                const idx = y * w + x;
+                if (visited[idx]) return;
+                const p = idx * 4;
+                if (!(data[p] > 234 && data[p + 1] > 234 && data[p + 2] > 234)) return;
+                visited[idx] = 1;
+                queue[tail++] = idx;
+              };
+              for (let x = 0; x < w; x++) { enqueue(x, 0); enqueue(x, h - 1); }
+              for (let y = 0; y < h; y++) { enqueue(0, y); enqueue(w - 1, y); }
+              while (head < tail) {
+                const idx = queue[head++];
+                data[idx * 4 + 3] = 0;
+                const x = idx % w;
+                const y = (idx - x) / w;
+                enqueue(x + 1, y); enqueue(x - 1, y); enqueue(x, y + 1); enqueue(x, y - 1);
+              }
+              wCtx.putImageData(imgData, 0, 0);
+
+              let portX = 0, portY = 0, portN = 0;
+              let nozX = 0, nozY = 0, nozN = 0;
+              const redPts = [];
+              const hullPts = [];
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  const p = (y * w + x) * 4;
+                  if (data[p + 3] < 40) continue;
+                  const r = data[p], g = data[p + 1], b = data[p + 2];
+                  const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+                  if (maxDiff < 26 && r >= 120 && r <= 220) {
+                    nozX += x; nozY += y; nozN++; hullPts.push({ x, y });
+                  } else if (b >= 135 && b - r >= 55 && b - g >= 35) {
+                    portX += x; portY += y; portN++; hullPts.push({ x, y });
+                  } else if (r >= 165 && r - g >= 55 && r - b >= 55) {
+                    redPts.push({ x, y }); hullPts.push({ x, y });
+                  } else if (b > 175 && g > 175 && r < 225) {
+                    hullPts.push({ x, y });
+                  }
+                }
+              }
+              if (portN > 10 && nozN > 10 && redPts.length > 10) {
+                const pCx = portX / portN, pCy = portY / portN;
+                const nCx = nozX / nozN, nCy = nozY / nozN;
+                const vx = pCx - nCx, vy = pCy - nCy;
+                const vLen = Math.hypot(vx, vy) || 1;
+                const ux = vx / vLen, uy = vy / vLen;
+                let noseSumX = 0, noseSumY = 0, noseCount = 0;
+                for (const pt of redPts) {
+                  const dx = pt.x - pCx, dy = pt.y - pCy;
+                  const proj = dx * ux + dy * uy;
+                  const perp = Math.abs(dx * -uy + dy * ux);
+                  if (proj > vLen * 0.25 && perp < vLen * 0.85) {
+                    noseSumX += pt.x; noseSumY += pt.y; noseCount++;
+                  }
+                }
+                if (noseCount > 5) {
+                  const noseCx = noseSumX / noseCount, noseCy = noseSumY / noseCount;
+                  axisAngle = Math.atan2(noseCy - nCy, noseCx - nCx);
+                  const ax = Math.cos(axisAngle), ay = Math.sin(axisAngle);
+                  let minProj = Infinity, maxProj = -Infinity;
+                  for (const pt of hullPts) {
+                    const proj = (pt.x - pCx) * ax + (pt.y - pCy) * ay;
+                    if (proj < minProj) minProj = proj;
+                    if (proj > maxProj) maxProj = proj;
+                  }
+                  if (maxProj > minProj + 20) {
+                    hullLen = maxProj - minProj;
+                    const midProj = (minProj + maxProj) * 0.5;
+                    anchorX = pCx + ax * midProj;
+                    anchorY = pCy + ay * midProj;
+                  }
+                }
+              }
+            } catch {}
+
+            const out = document.createElement('canvas');
+            out.width = 220;
+            out.height = 140;
+            const oCtx = out.getContext('2d');
+            if (oCtx) {
+              const normScale = 78 / Math.max(24, hullLen);
+              oCtx.translate(132, 70);
+              oCtx.rotate(-axisAngle);
+              oCtx.scale(normScale, normScale);
+              oCtx.drawImage(work, -anchorX, -anchorY);
+              shipSprites[key] = out;
+            }
+          };
+        }
+        loadShipSprite('idle', SHIP_IDLE_URL);
+        loadShipSprite('moving', SHIP_THRUST_URL);
+
+        let asteroidSprite = null;
+        (() => {
+          const img = new Image();
+          img.src = ASTEROID_URL;
+          img.onload = () => {
+            const maxDim = 420;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const work = document.createElement('canvas');
+            work.width = w;
+            work.height = h;
+            const wCtx = work.getContext('2d');
+            if (!wCtx) return;
+            wCtx.drawImage(img, 0, 0, w, h);
+
+            try {
+              const imgData = wCtx.getImageData(0, 0, w, h);
+              const data = imgData.data;
+              const visited = new Uint8Array(w * h);
+              const queue = new Int32Array(w * h);
+              let head = 0;
+              let tail = 0;
+
+              const isNearBlack = (idx) => {
+                const p = idx * 4;
+                return data[p] < 36 && data[p + 1] < 36 && data[p + 2] < 36;
+              };
+              const enqueue = (x, y) => {
+                if (x < 0 || x >= w || y < 0 || y >= h) return;
+                const idx = y * w + x;
+                if (visited[idx] || !isNearBlack(idx)) return;
+                visited[idx] = 1;
+                queue[tail++] = idx;
+              };
+              for (let x = 0; x < w; x++) {
+                enqueue(x, 0);
+                enqueue(x, h - 1);
+              }
+              for (let y = 0; y < h; y++) {
+                enqueue(0, y);
+                enqueue(w - 1, y);
+              }
+              while (head < tail) {
+                const idx = queue[head++];
+                data[idx * 4 + 3] = 0;
+                const x = idx % w;
+                const y = (idx - x) / w;
+                enqueue(x + 1, y);
+                enqueue(x - 1, y);
+                enqueue(x, y + 1);
+                enqueue(x, y - 1);
+              }
+
+              let minX = w, minY = h, maxX = 0, maxY = 0;
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  const p = (y * w + x) * 4;
+                  if (data[p + 3] > 20 && Math.max(data[p], data[p + 1], data[p + 2]) > 55) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                  }
+                }
+              }
+
+              wCtx.putImageData(imgData, 0, 0);
+              const bw = Math.max(1, maxX - minX + 1);
+              const bh = Math.max(1, maxY - minY + 1);
+              const side = Math.max(bw, bh);
+              const cropped = document.createElement('canvas');
+              cropped.width = side;
+              cropped.height = side;
+              const cCtx = cropped.getContext('2d');
+              if (cCtx) {
+                cCtx.drawImage(work, minX, minY, bw, bh, (side - bw) / 2, (side - bh) / 2, bw, bh);
+                asteroidSprite = cropped;
+              }
+            } catch {
+              asteroidSprite = work;
+            }
+          };
+        })();
+
+        // Web Audio API Sound Engine
+        const audio = {
+          ctx: null,
+          muted: false,
+          ensure() {
+            if (this.muted) return null;
+            if (!this.ctx) {
+              const Ctx = window.AudioContext || window.webkitAudioContext;
+              if (Ctx) this.ctx = new Ctx();
+            }
+            if (this.ctx && this.ctx.state === 'suspended') {
+              this.ctx.resume().catch(() => {});
+            }
+            return this.ctx;
+          },
+          playPickup() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(660, now);
+            osc.frequency.exponentialRampToValueAtTime(1180, now + 0.14);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.19);
+          },
+          playTick(progress) {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(420 + progress * 480, now);
+            gain.gain.setValueAtTime(0.035, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.07);
+          },
+          playRescued() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              const t = now + i * 0.07;
+              osc.frequency.setValueAtTime(freq, t);
+              gain.gain.setValueAtTime(0.08, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(t);
+              osc.stop(t + 0.3);
+            });
+          },
+          playLaunch() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            const buf = ctx.createBuffer(1, ctx.sampleRate * 2.4, ctx.sampleRate);
+            const ch = buf.getChannelData(0);
+            for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+            const noise = ctx.createBufferSource();
+            noise.buffer = buf;
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(140, now);
+            filter.frequency.exponentialRampToValueAtTime(900, now + 1.4);
+            filter.frequency.exponentialRampToValueAtTime(200, now + 2.3);
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.01, now);
+            gain.gain.linearRampToValueAtTime(0.16, now + 0.35);
+            gain.gain.exponentialRampToValueAtTime(0.002, now + 2.35);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start(now);
+            noise.stop(now + 2.4);
+          },
+          playArrival() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            [440, 554.37, 659.25].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'triangle';
+              const t = now + i * 0.09;
+              osc.frequency.setValueAtTime(freq, t);
+              gain.gain.setValueAtTime(0.07, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(t);
+              osc.stop(t + 0.36);
+            });
+          },
+          playAlert() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            [780, 1040].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'square';
+              const t = now + i * 0.085;
+              osc.frequency.setValueAtTime(freq, t);
+              gain.gain.setValueAtTime(0.05, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(t);
+              osc.stop(t + 0.085);
+            });
+          },
+          playImpact() {
+            const ctx = this.ensure();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(160, now);
+            osc.frequency.exponentialRampToValueAtTime(42, now + 0.28);
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.31);
+
+            const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.22), ctx.sampleRate);
+            const ch = buf.getChannelData(0);
+            for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+            const noise = ctx.createBufferSource();
+            noise.buffer = buf;
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(420, now);
+            const nGain = ctx.createGain();
+            nGain.gain.setValueAtTime(0.14, now);
+            nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+            noise.connect(filter);
+            filter.connect(nGain);
+            nGain.connect(ctx.destination);
+            noise.start(now);
+            noise.stop(now + 0.22);
+          },
+        };
+
+        // Application State
+        const stars = Array.from({ length: 190 }, () => ({
+          x: Math.random(),
+          y: Math.random(),
+          size: 0.7 + Math.random() * 1.9,
+          alpha: 0.25 + Math.random() * 0.75,
+          speedFactor: 0.4 + Math.random() * 1.4,
+        }));
+
+        let state = {
+          phase: 'MENU',
+          selectedStartPlanet: 'moon',
+          planetId: 'moon',
+          score: 0,
+          objectsByPlanet: {
+            moon: INITIAL_OBJECTS.moon.map((o) => ({ ...o })),
+            mars: INITIAL_OBJECTS.mars.map((o) => ({ ...o })),
+          },
+          crystalsByPlanet: {
+            moon: generateCrystals('moon'),
+            mars: generateCrystals('mars'),
+          },
+          logEntries: [],
+          allCompletedShown: false,
+          sidebarTab: 'radar',
+          logFilter: 'all',
+        };
+
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (saved && saved.objectsByPlanet && saved.objectsByPlanet.moon?.[0]?.orbitRadiusX) {
+            state.planetId = saved.planetId || 'moon';
+            state.selectedStartPlanet = state.planetId;
+            state.score = saved.score || 0;
+            state.objectsByPlanet = saved.objectsByPlanet;
+            state.crystalsByPlanet = saved.crystalsByPlanet;
+            state.logEntries = saved.logEntries || [];
+            state.allCompletedShown = Boolean(saved.allCompletedShown);
+            if (state.logEntries.length > 0) state.phase = 'PLAYING';
+          }
+        } catch {}
+
+        const ship = {
+          x: WORLD_WIDTH / 2,
+          y: WORLD_HEIGHT / 2,
+          vx: 0,
+          vy: 0,
+          angle: -Math.PI / 2,
+          thrusting: false,
+          boosting: false,
+          boostEnergy: 100,
+          hull: 100,
+          invulnTimer: 0,
+        };
+
+        const camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+        let particles = [];
+        let packets = [];
+        let asteroids = [];
+        let asteroidSpawnTimer = 2.4;
+        let screenShake = 0;
+        let keys = {};
+        const pointer = { active: false, x: 0, y: 0 };
+        let tickCooldown = 0;
+        let radarSweepAngle = 0;
+        let minimapSweepAngle = 0;
+        let toastTimer = 0;
+        let transition = { active: false, startTime: 0, from: 'moon', to: 'mars' };
+
+        // DOM references
+        const gameCanvas = document.getElementById('gameCanvas');
+        const ctx = gameCanvas.getContext('2d');
+        const radarCanvas = document.getElementById('radarCanvas');
+        const rCtx = radarCanvas.getContext('2d');
+        const minimapCanvas = document.getElementById('minimapCanvas');
+        const mCtx = minimapCanvas.getContext('2d');
+        const elMinimapBox = document.getElementById('minimapBox');
+        const elMinimapCounter = document.getElementById('minimapCounter');
+        const elMinimapInfo = document.getElementById('minimapInfo');
+
+        const elTopPlanet = document.getElementById('topPlanetName');
+        const elTopScore = document.getElementById('topScore');
+        const elTopRescued = document.getElementById('topRescued');
+        const elTopTotalLog = document.getElementById('topTotalLog');
+        const elHudSector = document.getElementById('hudSector');
+        const elHudSectorTitle = document.getElementById('hudSectorTitle');
+        const elHudSectorSub = document.getElementById('hudSectorSub');
+        const elHudHint = document.getElementById('hudHint');
+        const elHullFill = document.getElementById('hullFill');
+        const elHullLabel = document.getElementById('hullLabel');
+        const elBoostFill = document.getElementById('boostFill');
+        const elBoostLabel = document.getElementById('boostLabel');
+        const elLaunchBanner = document.getElementById('launchBanner');
+        const elLaunchBannerTitle = document.getElementById('launchBannerTitle');
+        const elLaunchBannerSub = document.getElementById('launchBannerSub');
+        const elBtnLaunchBanner = document.getElementById('btnLaunchBanner');
+        const elBtnLaunchSidebar = document.getElementById('btnLaunchSidebar');
+        const elPropulsionStatus = document.getElementById('propulsionStatus');
+        const elPropulsionDesc = document.getElementById('propulsionDesc');
+        const elTransitionOverlay = document.getElementById('transitionOverlay');
+        const elTransitionStage = document.getElementById('transitionStage');
+        const elTransitionPercent = document.getElementById('transitionPercent');
+        const elTransitionFill = document.getElementById('transitionFill');
+        const elTransitionFrom = document.getElementById('transitionFrom');
+        const elTransitionTo = document.getElementById('transitionTo');
+        const elMenuModal = document.getElementById('menuModal');
+        const elVictoryModal = document.getElementById('victoryModal');
+        const elDestroyedModal = document.getElementById('destroyedModal');
+        const elVictoryScore = document.getElementById('victoryScore');
+        const elToast = document.getElementById('toastBox');
+
+        function saveState() {
+          try {
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({
+                planetId: state.planetId,
+                score: state.score,
+                objectsByPlanet: state.objectsByPlanet,
+                crystalsByPlanet: state.crystalsByPlanet,
+                logEntries: state.logEntries,
+                allCompletedShown: state.allCompletedShown,
+              })
+            );
+          } catch {}
+        }
+
+        function getCardinal(dx, dy) {
+          const deg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+          if (deg >= 337.5 || deg < 22.5) return 'E';
+          if (deg < 67.5) return 'SE';
+          if (deg < 112.5) return 'S';
+          if (deg < 157.5) return 'SO';
+          if (deg < 202.5) return 'O';
+          if (deg < 247.5) return 'NO';
+          if (deg < 292.5) return 'N';
+          return 'NE';
+        }
+
+        function renderLogbook() {
+          const list = document.getElementById('logEntriesList');
+          const countEl = document.getElementById('logCounter');
+          countEl.textContent = `${state.logEntries.length}/8 registros`;
+
+          const moonCount = state.logEntries.filter((e) => e.planet === 'moon').length;
+          const marsCount = state.logEntries.filter((e) => e.planet === 'mars').length;
+
+          document.querySelector('[data-filter="all"]').textContent = `Todos (${state.logEntries.length})`;
+          document.querySelector('[data-filter="moon"]').textContent = `La Luna (${moonCount})`;
+          document.querySelector('[data-filter="mars"]').textContent = `Marte (${marsCount})`;
+
+          const items =
+            state.logFilter === 'all'
+              ? state.logEntries
+              : state.logEntries.filter((e) => e.planet === state.logFilter);
+
+          if (items.length === 0) {
+            list.innerHTML = `
+              <div class="log-card" style="text-align:center;padding:20px;">
+                <div style="font-size:12px;font-weight:600;color:#cbd5e1;">Sin transmisiones registradas</div>
+                <p style="font-size:12px;color:#94a3b8;margin:6px 0 0 0;line-height:1.5;">
+                  Acércate a los objetos señalados en el radar para recibir su información científica y guardarla aquí.
+                </p>
+              </div>`;
+            return;
+          }
+
+          list.innerHTML = items
+            .map(
+              (entry) => `
+              <article class="log-card">
+                <div class="log-head">
+                  <span class="log-obj">${entry.objectName}</span>
+                  <span class="log-status">Guardado</span>
+                </div>
+                <div class="log-meta">
+                  <span style="color:${entry.planet === 'moon' ? '#22d3ee' : '#fbbf24'};">${entry.planetName}</span>
+                  · ${entry.sector} · <span class="metric-mono">${entry.timestamp}</span>
+                </div>
+                <div class="log-title">${entry.transmissionTitle}</div>
+                <p class="log-summary">${entry.transmissionSummary}</p>
+                <div class="log-foot">
+                  <span style="color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.telemetryReading}</span>
+                  <span style="color:#34d399;flex-shrink:0;">+${entry.pointsEarned} pts</span>
+                </div>
+              </article>`
+            )
+            .join('');
+        }
+
+        function syncUI() {
+          const planet = PLANETS[state.planetId];
+          const objs = state.objectsByPlanet[state.planetId];
+          const rescuedCount = objs.filter((o) => o.discovered).length;
+          const totalRescued =
+            state.objectsByPlanet.moon.filter((o) => o.discovered).length +
+            state.objectsByPlanet.mars.filter((o) => o.discovered).length;
+          const complete = rescuedCount === 4;
+
+          elTopPlanet.textContent = planet.name;
+          elTopPlanet.className = planet.id === 'moon' ? 'planet-label-moon' : 'planet-label-mars';
+          elTopScore.textContent = state.score.toLocaleString('es-MX');
+          elTopRescued.textContent = String(rescuedCount);
+          elTopTotalLog.textContent = String(totalRescued);
+
+          elHudSector.classList.toggle('hidden', state.phase !== 'PLAYING');
+          elMinimapBox.classList.toggle('hidden', state.phase !== 'PLAYING');
+          elHudHint.classList.toggle('hidden', state.phase !== 'PLAYING' || complete);
+          elMenuModal.classList.toggle('hidden', state.phase !== 'MENU');
+          elVictoryModal.classList.toggle('hidden', state.phase !== 'ALL_COMPLETED');
+          elDestroyedModal.classList.toggle('hidden', state.phase !== 'SHIP_DESTROYED');
+          elTransitionOverlay.classList.toggle('hidden', state.phase !== 'TAKEOFF_TRANSITION');
+
+          elHudSectorTitle.textContent = `${planet.name} · ${planet.sectorName}`;
+          elHudSectorSub.textContent = `Gravedad ${planet.gravityLabel} · Temp ${planet.surfaceTemp}`;
+          const hullPct = Math.max(0, Math.round(ship.hull));
+          elHullFill.style.width = `${hullPct}%`;
+          elHullFill.style.background = hullPct > 50 ? '#34d399' : hullPct > 25 ? '#fbbf24' : '#ef4444';
+          elHullLabel.textContent = `${hullPct}%`;
+          elHullLabel.style.color = hullPct <= 25 ? '#f87171' : '#e2e8f0';
+          elBoostFill.style.background = planet.id === 'moon' ? '#22d3ee' : '#fbbf24';
+          elMinimapCounter.textContent = `${rescuedCount}/4`;
+
+          document.getElementById('tabRadar').textContent = `Radar (${rescuedCount}/4)`;
+          document.getElementById('tabLogbook').textContent = `Bitácora (${state.logEntries.length})`;
+          document.getElementById('radarCounter').textContent = `${rescuedCount}/4 rescatados`;
+
+          // Launch Banner & Sidebar button
+          elLaunchBanner.classList.toggle('hidden', !(state.phase === 'PLAYING' && complete));
+          elLaunchBannerTitle.textContent = `Misión en ${planet.name} completada (4/4 objetos)`;
+          elLaunchBannerSub.textContent = `Propulsores listos para despegar hacia ${planet.targetPlanetName}.`;
+
+          const btnClass =
+            planet.targetPlanetId === 'mars' ? 'btn btn-primary-amber' : 'btn btn-primary-cyan';
+          elBtnLaunchBanner.className = btnClass;
+          elBtnLaunchBanner.textContent = `Despegar hacia ${planet.targetPlanetName}`;
+
+          elBtnLaunchSidebar.className = btnClass;
+          elBtnLaunchSidebar.textContent = `Despegar hacia ${planet.targetPlanetName}`;
+          elBtnLaunchSidebar.disabled = !(complete && state.phase === 'PLAYING');
+
+          elPropulsionStatus.textContent = complete ? 'Desbloqueado' : 'Bloqueado';
+          elPropulsionStatus.style.color = complete ? '#34d399' : '#94a3b8';
+          elPropulsionDesc.textContent = complete
+            ? `Todos los objetos de ${planet.name} fueron rescatados. Puedes despegar hacia ${planet.targetPlanetName}.`
+            : `Rescata los 4 objetos de ${planet.name} para habilitar el despegue hacia ${planet.targetPlanetName}.`;
+
+          // Checklist & current active sequential target
+          const activeIdx = objs.findIndex((o) => !o.discovered);
+          const withDist = objs.map((o, idx) => {
+            const dx = o.x - ship.x;
+            const dy = o.y - ship.y;
+            return {
+              ...o,
+              dist: Math.round(Math.hypot(dx, dy)),
+              bearing: getCardinal(dx, dy),
+              isActive: idx === activeIdx,
+              isQueued: !o.discovered && activeIdx !== -1 && idx > activeIdx,
+            };
+          });
+
+          const activeTarget = activeIdx >= 0 ? withDist[activeIdx] : null;
+          document.getElementById('radarCoords').textContent = `X:${Math.round(ship.x)} · Y:${Math.round(ship.y)}`;
+
+          if (activeTarget) {
+            document.getElementById('nearestLabel').textContent = `Objetivo activo (${activeIdx + 1}/4)`;
+            document.getElementById('nearestLabel').style.color = '#94a3b8';
+            document.getElementById('nearestName').textContent = activeTarget.name;
+            document.getElementById('nearestDist').textContent = `${activeTarget.dist} m · Rumbo ${activeTarget.bearing}`;
+            document.getElementById('nearestDist').style.color = planet.id === 'moon' ? '#22d3ee' : '#fbbf24';
+          } else {
+            document.getElementById('nearestLabel').textContent = 'Barrido completado';
+            document.getElementById('nearestLabel').style.color = '#34d399';
+            document.getElementById('nearestName').textContent = `Señales de ${planet.name}`;
+            document.getElementById('nearestDist').textContent = '4/4 en bitácora';
+            document.getElementById('nearestDist').style.color = '#34d399';
+          }
+
+          document.getElementById('objectChecklist').innerHTML = withDist
+            .map(
+              (o) => `
+              <div class="check-item" style="${o.isQueued ? 'opacity:0.5;' : ''}">
+                <div>
+                  <div class="check-name">
+                    ${
+                      o.discovered
+                        ? '<span style="color:#34d399;">✓</span>'
+                        : o.isActive
+                        ? `<span class="diamond-dot ${planet.id === 'mars' ? 'mars' : ''}"></span>`
+                        : '<span style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#334155;"></span>'
+                    }
+                    <span>${o.isQueued ? 'Señal por confirmar' : o.name}</span>
+                  </div>
+                  <div class="check-sub">${
+                    o.isQueued
+                      ? 'Aparecerá al recoger el objeto actual'
+                      : `${o.sector} · ${o.frequency}`
+                  }</div>
+                </div>
+                <div class="check-dist ${o.discovered ? 'check-done' : ''}">
+                  ${
+                    o.discovered
+                      ? 'Rescatado'
+                      : o.isActive
+                      ? `${o.dist} m ${o.bearing}`
+                      : 'En espera'
+                  }
+                </div>
+              </div>`
+            )
+            .join('');
+
+          renderLogbook();
+        }
+
+        function showToast(obj, planet) {
+          document.getElementById('toastHeader').textContent = `${obj.name} · Información recibida`;
+          document.getElementById('toastPoints').textContent = `+${obj.points} pts`;
+          document.getElementById('toastSubtitle').textContent = obj.transmissionTitle;
+          document.getElementById('toastReading').textContent = obj.telemetryReading;
+          elToast.classList.remove('hidden');
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => elToast.classList.add('hidden'), 4800);
+        }
+
+        function launchToTargetPlanet() {
+          const planet = PLANETS[state.planetId];
+          const complete = state.objectsByPlanet[state.planetId].every((o) => o.discovered);
+          if (!complete || state.phase !== 'PLAYING') return;
+
+          audio.playLaunch();
+          elToast.classList.add('hidden');
+          asteroids = [];
+          screenShake = 0;
+          transition = {
+            active: true,
+            startTime: performance.now(),
+            from: state.planetId,
+            to: planet.targetPlanetId,
+          };
+          elTransitionFrom.textContent = `Origen: ${planet.name}`;
+          elTransitionTo.textContent = `Destino: ${planet.targetPlanetName}`;
+          state.phase = 'TAKEOFF_TRANSITION';
+          syncUI();
+        }
+
+        // UI Event Listeners
+        document.getElementById('optMoon').addEventListener('click', () => {
+          state.selectedStartPlanet = 'moon';
+          document.getElementById('optMoon').className = 'planet-option selected-moon';
+          document.getElementById('optMars').className = 'planet-option';
+        });
+
+        document.getElementById('optMars').addEventListener('click', () => {
+          state.selectedStartPlanet = 'mars';
+          document.getElementById('optMars').className = 'planet-option selected-mars';
+          document.getElementById('optMoon').className = 'planet-option';
+        });
+
+        document.getElementById('btnStart').addEventListener('click', () => {
+          state.planetId = state.selectedStartPlanet;
+          state.score = 0;
+          state.objectsByPlanet = {
+            moon: INITIAL_OBJECTS.moon.map((o) => ({ ...o })),
+            mars: INITIAL_OBJECTS.mars.map((o) => ({ ...o })),
+          };
+          state.crystalsByPlanet = {
+            moon: generateCrystals('moon'),
+            mars: generateCrystals('mars'),
+          };
+          state.logEntries = [];
+          state.allCompletedShown = false;
+          ship.x = WORLD_WIDTH / 2;
+          ship.y = WORLD_HEIGHT / 2;
+          ship.vx = 0;
+          ship.vy = 0;
+          ship.angle = -Math.PI / 2;
+          ship.boostEnergy = 100;
+          ship.hull = 100;
+          ship.invulnTimer = 1.6;
+          asteroids = [];
+          asteroidSpawnTimer = 2.4;
+          screenShake = 0;
+          camera.x = ship.x;
+          camera.y = ship.y;
+          state.phase = 'PLAYING';
+          saveState();
+          syncUI();
+        });
+
+        function resetGame() {
+          localStorage.removeItem(STORAGE_KEY);
+          state.planetId = 'moon';
+          state.selectedStartPlanet = 'moon';
+          state.score = 0;
+          state.objectsByPlanet = {
+            moon: INITIAL_OBJECTS.moon.map((o) => ({ ...o })),
+            mars: INITIAL_OBJECTS.mars.map((o) => ({ ...o })),
+          };
+          state.crystalsByPlanet = {
+            moon: generateCrystals('moon'),
+            mars: generateCrystals('mars'),
+          };
+          state.logEntries = [];
+          state.allCompletedShown = false;
+          state.phase = 'MENU';
+          ship.x = WORLD_WIDTH / 2;
+          ship.y = WORLD_HEIGHT / 2;
+          ship.vx = 0;
+          ship.vy = 0;
+          ship.boostEnergy = 100;
+          ship.hull = 100;
+          ship.invulnTimer = 0;
+          asteroids = [];
+          asteroidSpawnTimer = 2.4;
+          screenShake = 0;
+          camera.x = ship.x;
+          camera.y = ship.y;
+          document.getElementById('optMoon').className = 'planet-option selected-moon';
+          document.getElementById('optMars').className = 'planet-option';
+          syncUI();
+        }
+
+        function repairAndRespawn() {
+          ship.x = WORLD_WIDTH / 2;
+          ship.y = WORLD_HEIGHT / 2;
+          ship.vx = 0;
+          ship.vy = 0;
+          ship.angle = -Math.PI / 2;
+          ship.boostEnergy = 100;
+          ship.hull = 100;
+          ship.invulnTimer = 1.6;
+          asteroids = [];
+          asteroidSpawnTimer = 2.4;
+          screenShake = 0;
+          camera.x = ship.x;
+          camera.y = ship.y;
+          state.phase = 'PLAYING';
+          syncUI();
+        }
+
+        document.getElementById('btnReset').addEventListener('click', resetGame);
+        document.getElementById('btnRestartVictory').addEventListener('click', resetGame);
+        document.getElementById('btnRepair').addEventListener('click', repairAndRespawn);
+        document.getElementById('btnRestartDestroyed').addEventListener('click', resetGame);
+        document.getElementById('btnKeepPlaying').addEventListener('click', () => {
+          state.phase = 'PLAYING';
+          syncUI();
+        });
+
+        document.getElementById('btnMute').addEventListener('click', (e) => {
+          audio.muted = !audio.muted;
+          e.currentTarget.textContent = audio.muted ? 'Silenciado' : 'Audio';
+        });
+
+        elBtnLaunchBanner.addEventListener('click', launchToTargetPlanet);
+        elBtnLaunchSidebar.addEventListener('click', launchToTargetPlanet);
+
+        document.getElementById('btnToastLog').addEventListener('click', () => {
+          state.sidebarTab = 'logbook';
+          document.getElementById('tabRadar').classList.remove('active');
+          document.getElementById('tabLogbook').classList.add('active');
+          document.getElementById('radarPanelBody').classList.add('hidden');
+          document.getElementById('logbookPanelBody').classList.remove('hidden');
+          elToast.classList.add('hidden');
+        });
+
+        document.getElementById('tabRadar').addEventListener('click', () => {
+          state.sidebarTab = 'radar';
+          document.getElementById('tabRadar').classList.add('active');
+          document.getElementById('tabLogbook').classList.remove('active');
+          document.getElementById('radarPanelBody').classList.remove('hidden');
+          document.getElementById('logbookPanelBody').classList.add('hidden');
+        });
+
+        document.getElementById('tabLogbook').addEventListener('click', () => {
+          state.sidebarTab = 'logbook';
+          document.getElementById('tabLogbook').classList.add('active');
+          document.getElementById('tabRadar').classList.remove('active');
+          document.getElementById('logbookPanelBody').classList.remove('hidden');
+          document.getElementById('radarPanelBody').classList.add('hidden');
+        });
+
+        document.querySelectorAll('[data-filter]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.logFilter = btn.getAttribute('data-filter');
+            document.querySelectorAll('[data-filter]').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderLogbook();
+          });
+        });
+
+        // Keyboard & Pointer Controls
+        window.addEventListener('keydown', (e) => {
+          if (
+            ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(
+              e.code
+            )
+          ) {
+            if (state.phase === 'PLAYING') e.preventDefault();
+            keys[e.code] = true;
+          }
+        });
+        window.addEventListener('keyup', (e) => {
+          keys[e.code] = false;
+        });
+        window.addEventListener('blur', () => {
+          keys = {};
+          pointer.active = false;
+        });
+
+        gameCanvas.addEventListener('pointerdown', (e) => {
+          if (state.phase !== 'PLAYING') return;
+          const rect = gameCanvas.getBoundingClientRect();
+          pointer.active = true;
+          pointer.x = e.clientX - rect.left;
+          pointer.y = e.clientY - rect.top;
+        });
+        gameCanvas.addEventListener('pointermove', (e) => {
+          if (!pointer.active) return;
+          const rect = gameCanvas.getBoundingClientRect();
+          pointer.x = e.clientX - rect.left;
+          pointer.y = e.clientY - rect.top;
+        });
+        window.addEventListener('pointerup', () => {
+          pointer.active = false;
+        });
+
+        // Canvas Resize
+        let viewW = 800;
+        let viewH = 600;
+        let dpr = 1;
+        function resizeCanvas() {
+          const parent = gameCanvas.parentElement;
+          viewW = Math.max(320, parent.clientWidth);
+          viewH = Math.max(300, parent.clientHeight);
+          dpr = Math.min(window.devicePixelRatio || 1, 2);
+          gameCanvas.width = Math.floor(viewW * dpr);
+          gameCanvas.height = Math.floor(viewH * dpr);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function drawShip(x, y, angle, thrusting, boosting, scale, accent) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(angle);
+          ctx.scale(scale, scale);
+
+          const activeSprite = thrusting || boosting ? shipSprites.moving : shipSprites.idle;
+          if (activeSprite) {
+            if (boosting) {
+              const pulse = 0.75 + Math.random() * 0.35;
+              const halo = ctx.createRadialGradient(-26, 0, 2, -28, 0, 26 * pulse);
+              halo.addColorStop(0, 'rgba(56,189,248,0.7)');
+              halo.addColorStop(0.5, 'rgba(251,191,36,0.35)');
+              halo.addColorStop(1, 'rgba(56,189,248,0)');
+              ctx.fillStyle = halo;
+              ctx.beginPath();
+              ctx.arc(-28, 0, 26 * pulse, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            const drawScale = 0.76;
+            ctx.drawImage(
+              activeSprite,
+              -132 * drawScale,
+              -70 * drawScale,
+              220 * drawScale,
+              140 * drawScale
+            );
+            ctx.restore();
+            return;
+          }
+
+          if (thrusting || boosting) {
+            const flicker = 0.85 + Math.random() * 0.35;
+            const flameLen = (boosting ? 34 : 20) * flicker;
+            const grad = ctx.createLinearGradient(-14, 0, -14 - flameLen, 0);
+            grad.addColorStop(0, '#FFFFFF');
+            grad.addColorStop(0.35, boosting ? '#38BDF8' : '#F59E0B');
+            grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(-13, -5.5);
+            ctx.lineTo(-14 - flameLen, 0);
+            ctx.lineTo(-13, 5.5);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          ctx.fillStyle = '#CBD5E1';
+          ctx.strokeStyle = '#0F172A';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(18, 0);
+          ctx.lineTo(-10, -15);
+          ctx.lineTo(-15, -11);
+          ctx.lineTo(-11, 0);
+          ctx.lineTo(-15, 11);
+          ctx.lineTo(-10, 15);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#F8FAFC';
+          ctx.beginPath();
+          ctx.moveTo(22, 0);
+          ctx.lineTo(2, -7);
+          ctx.lineTo(-13, -6);
+          ctx.lineTo(-15, 0);
+          ctx.lineTo(-13, 6);
+          ctx.lineTo(2, 7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = accent;
+          ctx.beginPath();
+          ctx.moveTo(-2, -7);
+          ctx.lineTo(-10, -12);
+          ctx.lineTo(-12, -9);
+          ctx.lineTo(-5, -5);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(-2, 7);
+          ctx.lineTo(-10, 12);
+          ctx.lineTo(-12, 9);
+          ctx.lineTo(-5, 5);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = '#0EA5E9';
+          ctx.beginPath();
+          ctx.ellipse(6, 0, 6.5, 3.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        function drawRadar() {
+          const size = radarCanvas.width;
+          const cx = size / 2;
+          const cy = size / 2;
+          const radius = size / 2 - 6;
+          const planet = PLANETS[state.planetId];
+
+          rCtx.clearRect(0, 0, size, size);
+          rCtx.fillStyle = '#080C14';
+          rCtx.beginPath();
+          rCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+          rCtx.fill();
+
+          rCtx.strokeStyle =
+            planet.id === 'moon' ? 'rgba(6, 182, 212, 0.16)' : 'rgba(245, 158, 11, 0.16)';
+          rCtx.lineWidth = 1;
+          [0.33, 0.66, 1].forEach((r) => {
+            rCtx.beginPath();
+            rCtx.arc(cx, cy, radius * r, 0, Math.PI * 2);
+            rCtx.stroke();
+          });
+          rCtx.beginPath();
+          rCtx.moveTo(cx - radius, cy);
+          rCtx.lineTo(cx + radius, cy);
+          rCtx.moveTo(cx, cy - radius);
+          rCtx.lineTo(cx, cy + radius);
+          rCtx.stroke();
+
+          radarSweepAngle = (radarSweepAngle + 0.035) % (Math.PI * 2);
+          rCtx.save();
+          rCtx.beginPath();
+          rCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+          rCtx.clip();
+
+          const rgb = planet.id === 'moon' ? 'rgba(6, 182, 212,' : 'rgba(245, 158, 11,';
+          for (let i = 0; i < 14; i++) {
+            const a0 = radarSweepAngle - (i / 14) * 0.6;
+            const a1 = radarSweepAngle - ((i + 1) / 14) * 0.6;
+            rCtx.fillStyle = `${rgb} ${((1 - i / 14) * 0.22).toFixed(3)})`;
+            rCtx.beginPath();
+            rCtx.moveTo(cx, cy);
+            rCtx.arc(cx, cy, radius, a1, a0);
+            rCtx.closePath();
+            rCtx.fill();
+          }
+
+          rCtx.strokeStyle = planet.id === 'moon' ? 'rgba(34,211,238,0.8)' : 'rgba(251,191,36,0.8)';
+          rCtx.lineWidth = 1.5;
+          rCtx.beginPath();
+          rCtx.moveTo(cx, cy);
+          rCtx.lineTo(cx + Math.cos(radarSweepAngle) * radius, cy + Math.sin(radarSweepAngle) * radius);
+          rCtx.stroke();
+          rCtx.restore();
+
+          const range = 1350;
+          state.crystalsByPlanet[state.planetId].forEach((c) => {
+            if (c.collected) return;
+            const dx = c.x - ship.x;
+            const dy = c.y - ship.y;
+            if (Math.hypot(dx, dy) > range) return;
+            rCtx.fillStyle = planet.id === 'moon' ? 'rgba(56,189,248,0.45)' : 'rgba(251,191,36,0.45)';
+            rCtx.beginPath();
+            rCtx.arc(cx + (dx / range) * (radius - 6), cy + (dy / range) * (radius - 6), 2, 0, Math.PI * 2);
+            rCtx.fill();
+          });
+
+          const now = performance.now();
+          const objs = state.objectsByPlanet[state.planetId];
+          const activeObj = objs.find((o) => !o.discovered) || null;
+          objs.forEach((o) => {
+            if (!o.discovered && (!activeObj || o.id !== activeObj.id)) return;
+            const dx = o.x - ship.x;
+            const dy = o.y - ship.y;
+            const ratio = Math.min(1, Math.hypot(dx, dy) / range);
+            const ang = Math.atan2(dy, dx);
+            const rx = cx + Math.cos(ang) * ratio * (radius - 8);
+            const ry = cy + Math.sin(ang) * ratio * (radius - 8);
+
+            if (o.discovered) {
+              rCtx.fillStyle = '#10B981';
+              rCtx.beginPath();
+              rCtx.arc(rx, ry, 4, 0, Math.PI * 2);
+              rCtx.fill();
+            } else {
+              const pulse = 0.5 + 0.5 * Math.sin(now * 0.006);
+              rCtx.strokeStyle =
+                planet.id === 'moon'
+                  ? `rgba(34, 211, 238, ${0.35 + pulse * 0.5})`
+                  : `rgba(251, 191, 36, ${0.35 + pulse * 0.5})`;
+              rCtx.beginPath();
+              rCtx.arc(rx, ry, 5 + pulse * 4, 0, Math.PI * 2);
+              rCtx.stroke();
+
+              rCtx.fillStyle = planet.id === 'moon' ? '#22D3EE' : '#FBBF24';
+              rCtx.save();
+              rCtx.translate(rx, ry);
+              rCtx.rotate(Math.PI / 4);
+              rCtx.fillRect(-3.5, -3.5, 7, 7);
+              rCtx.restore();
+            }
+          });
+
+          rCtx.save();
+          rCtx.translate(cx, cy);
+          rCtx.rotate(ship.angle);
+          rCtx.fillStyle = '#F8FAFC';
+          rCtx.beginPath();
+          rCtx.moveTo(7, 0);
+          rCtx.lineTo(-5, -4.5);
+          rCtx.lineTo(-2.5, 0);
+          rCtx.lineTo(-5, 4.5);
+          rCtx.closePath();
+          rCtx.fill();
+          rCtx.restore();
+        }
+
+        function drawMinimap() {
+          if (state.phase !== 'PLAYING') return;
+          const w = minimapCanvas.width;
+          const h = minimapCanvas.height;
+          const planet = PLANETS[state.planetId];
+          const objs = state.objectsByPlanet[state.planetId];
+          const crystals = state.crystalsByPlanet[state.planetId];
+
+          const pad = 6;
+          const mapW = w - pad * 2;
+          const mapH = h - pad * 2;
+          const toX = (wx) => pad + (wx / WORLD_WIDTH) * mapW;
+          const toY = (wy) => pad + (wy / WORLD_HEIGHT) * mapH;
+          const scaleAvg = mapW / WORLD_WIDTH;
+
+          mCtx.clearRect(0, 0, w, h);
+          mCtx.fillStyle = '#060910';
+          mCtx.fillRect(0, 0, w, h);
+
+          mCtx.strokeStyle =
+            planet.id === 'moon' ? 'rgba(56,189,248,0.25)' : 'rgba(251,146,60,0.28)';
+          mCtx.lineWidth = 1;
+          mCtx.strokeRect(pad, pad, mapW, mapH);
+
+          const cx = toX(CX);
+          const cy = toY(CY);
+          const planetR = PLANET_RADIUS * scaleAvg;
+
+          mCtx.fillStyle =
+            planet.id === 'moon' ? 'rgba(148,163,184,0.18)' : 'rgba(234,88,12,0.2)';
+          mCtx.strokeStyle =
+            planet.id === 'moon' ? 'rgba(203,213,225,0.35)' : 'rgba(251,146,60,0.42)';
+          mCtx.lineWidth = 1;
+          mCtx.beginPath();
+          mCtx.arc(cx, cy, planetR, 0, Math.PI * 2);
+          mCtx.fill();
+          mCtx.stroke();
+
+          mCtx.save();
+          mCtx.setLineDash([3, 3]);
+          mCtx.strokeStyle = 'rgba(148,163,184,0.2)';
+          mCtx.beginPath();
+          mCtx.arc(cx, cy, (PLANET_RADIUS + 240) * scaleAvg, 0, Math.PI * 2);
+          mCtx.stroke();
+          mCtx.restore();
+
+          const activeObj = objs.find((o) => !o.discovered) || null;
+          if (activeObj) {
+            mCtx.save();
+            mCtx.strokeStyle =
+              planet.id === 'moon' ? 'rgba(34,211,238,0.14)' : 'rgba(251,191,36,0.16)';
+            mCtx.lineWidth = 0.8;
+            mCtx.beginPath();
+            mCtx.ellipse(
+              toX(activeObj.orbitCenterX),
+              toY(activeObj.orbitCenterY),
+              activeObj.orbitRadiusX * scaleAvg,
+              activeObj.orbitRadiusY * (mapH / WORLD_HEIGHT),
+              0,
+              0,
+              Math.PI * 2
+            );
+            mCtx.stroke();
+            mCtx.restore();
+          }
+
+          minimapSweepAngle = (minimapSweepAngle + 0.045) % (Math.PI * 2);
+          const shipMx = toX(ship.x);
+          const shipMy = toY(ship.y);
+          const sweepR = 54;
+
+          mCtx.save();
+          mCtx.beginPath();
+          mCtx.rect(pad, pad, mapW, mapH);
+          mCtx.clip();
+
+          const rgb = planet.id === 'moon' ? 'rgba(34,211,238,' : 'rgba(251,191,36,';
+          for (let i = 0; i < 10; i++) {
+            const a0 = minimapSweepAngle - (i / 10) * 0.65;
+            const a1 = minimapSweepAngle - ((i + 1) / 10) * 0.65;
+            mCtx.fillStyle = `${rgb} ${((1 - i / 10) * 0.16).toFixed(3)})`;
+            mCtx.beginPath();
+            mCtx.moveTo(shipMx, shipMy);
+            mCtx.arc(shipMx, shipMy, sweepR, a1, a0);
+            mCtx.closePath();
+            mCtx.fill();
+          }
+          mCtx.strokeStyle = `${rgb} 0.65)`;
+          mCtx.lineWidth = 1;
+          mCtx.beginPath();
+          mCtx.moveTo(shipMx, shipMy);
+          mCtx.lineTo(
+            shipMx + Math.cos(minimapSweepAngle) * sweepR,
+            shipMy + Math.sin(minimapSweepAngle) * sweepR
+          );
+          mCtx.stroke();
+          mCtx.restore();
+
+          crystals.forEach((c) => {
+            if (c.collected) return;
+            mCtx.fillStyle =
+              planet.id === 'moon' ? 'rgba(56,189,248,0.45)' : 'rgba(251,191,36,0.45)';
+            mCtx.fillRect(toX(c.x) - 1, toY(c.y) - 1, 2, 2);
+          });
+
+          const activeDist = activeObj ? Math.hypot(activeObj.x - ship.x, activeObj.y - ship.y) : 0;
+
+          if (activeObj) {
+            mCtx.save();
+            mCtx.setLineDash([3, 3]);
+            mCtx.strokeStyle =
+              planet.id === 'moon' ? 'rgba(34,211,238,0.4)' : 'rgba(251,191,36,0.4)';
+            mCtx.lineWidth = 1;
+            mCtx.beginPath();
+            mCtx.moveTo(shipMx, shipMy);
+            mCtx.lineTo(toX(activeObj.x), toY(activeObj.y));
+            mCtx.stroke();
+            mCtx.restore();
+          }
+
+          const now = performance.now();
+          objs.forEach((obj) => {
+            if (!obj.discovered && (!activeObj || obj.id !== activeObj.id)) return;
+            const ox = toX(obj.x);
+            const oy = toY(obj.y);
+            if (obj.discovered) {
+              mCtx.fillStyle = '#10B981';
+              mCtx.beginPath();
+              mCtx.arc(ox, oy, 2.8, 0, Math.PI * 2);
+              mCtx.fill();
+            } else {
+              const pulse = 0.5 + 0.5 * Math.sin(now * 0.006);
+              mCtx.strokeStyle =
+                planet.id === 'moon'
+                  ? `rgba(34,211,238,${0.35 + pulse * 0.5})`
+                  : `rgba(251,191,36,${0.35 + pulse * 0.5})`;
+              mCtx.lineWidth = 1;
+              mCtx.beginPath();
+              mCtx.arc(ox, oy, 4 + pulse * 3, 0, Math.PI * 2);
+              mCtx.stroke();
+
+              mCtx.fillStyle = planet.id === 'moon' ? '#22D3EE' : '#FBBF24';
+              mCtx.save();
+              mCtx.translate(ox, oy);
+              mCtx.rotate(Math.PI / 4);
+              mCtx.fillRect(-2.5, -2.5, 5, 5);
+              mCtx.restore();
+            }
+          });
+
+          mCtx.save();
+          mCtx.translate(shipMx, shipMy);
+          mCtx.rotate(ship.angle);
+          mCtx.fillStyle = '#F8FAFC';
+          mCtx.strokeStyle = '#0F172A';
+          mCtx.lineWidth = 0.8;
+          mCtx.beginPath();
+          mCtx.moveTo(5.5, 0);
+          mCtx.lineTo(-4, -3.5);
+          mCtx.lineTo(-2, 0);
+          mCtx.lineTo(-4, 3.5);
+          mCtx.closePath();
+          mCtx.fill();
+          mCtx.stroke();
+          mCtx.restore();
+
+          if (activeObj) {
+            elMinimapInfo.textContent = `Objetivo actual: ${Math.round(activeDist)} m`;
+            elMinimapInfo.style.color = planet.id === 'moon' ? '#67E8F9' : '#FCD34D';
+          } else {
+            elMinimapInfo.textContent = '4/4 sondas escaneadas';
+            elMinimapInfo.style.color = '#34D399';
+          }
+        }
+
+        function renderTransition(now) {
+          const fromPlanet = PLANETS[transition.from];
+          const toPlanet = PLANETS[transition.to];
+          const elapsed = (now - transition.startTime) / 1000;
+          const p = Math.min(1, elapsed / 3.8);
+
+          let stage = `Despegando de ${fromPlanet.name}`;
+          if (p >= 0.25 && p < 0.68) stage = `Tránsito propulsado hacia ${toPlanet.name}`;
+          else if (p >= 0.68 && p < 0.92) stage = `Descenso orbital en ${toPlanet.name}`;
+          else if (p >= 0.92) stage = `Aterrizaje en ${toPlanet.sectorName}`;
+
+          elTransitionStage.textContent = stage;
+          elTransitionPercent.textContent = `${Math.round(p * 100)}%`;
+          elTransitionFill.style.width = `${Math.round(p * 100)}%`;
+
+          ctx.fillStyle = '#04060A';
+          ctx.fillRect(0, 0, viewW, viewH);
+
+          const warp = p < 0.2 ? p / 0.2 : p < 0.72 ? 1 : Math.max(0, 1 - (p - 0.72) / 0.28);
+          stars.forEach((s) => {
+            const sy = ((s.y * viewH + elapsed * (18 + warp * 580) * s.speedFactor) % viewH + viewH) % viewH;
+            const sx = s.x * viewW;
+            ctx.strokeStyle = `rgba(226,232,240,${Math.min(1, s.alpha * (0.5 + warp * 0.5))})`;
+            ctx.lineWidth = s.size;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx, sy - (1 + warp * 38 * s.speedFactor));
+            ctx.stroke();
+          });
+
+          if (p < 0.48) {
+            const r = p / 0.48;
+            const radius = Math.max(85, viewW * 0.65 * (1 - r * r * 0.85));
+            const sy = viewH * 0.78 + r * r * (viewH * 0.65);
+            ctx.save();
+            ctx.shadowColor = fromPlanet.atmosphereGlow;
+            ctx.shadowBlur = 35;
+            const fromSprite = planetSprites[fromPlanet.id];
+            if (fromSprite) {
+              ctx.drawImage(fromSprite, viewW / 2 - radius, sy - radius, radius * 2, radius * 2);
+            } else {
+              const g = ctx.createRadialGradient(viewW / 2 - radius * 0.25, sy - radius * 0.3, radius * 0.1, viewW / 2, sy, radius);
+              g.addColorStop(0, fromPlanet.planetSphereColors[0]);
+              g.addColorStop(0.55, fromPlanet.planetSphereColors[1]);
+              g.addColorStop(1, fromPlanet.planetSphereColors[2]);
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(viewW / 2, sy, radius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          if (p > 0.38) {
+            const a = (p - 0.38) / 0.62;
+            const eased = a * a * (3 - 2 * a);
+            const radius = 32 + eased * (Math.max(viewW, viewH) * 0.68);
+            const ty = -40 + eased * (viewH * 0.56);
+            ctx.save();
+            ctx.shadowColor = toPlanet.atmosphereGlow;
+            ctx.shadowBlur = 45;
+            const toSprite = planetSprites[toPlanet.id];
+            if (toSprite) {
+              ctx.drawImage(toSprite, viewW / 2 - radius, ty - radius, radius * 2, radius * 2);
+            } else {
+              const g = ctx.createRadialGradient(viewW / 2 - radius * 0.2, ty - radius * 0.25, radius * 0.08, viewW / 2, ty, radius);
+              g.addColorStop(0, toPlanet.planetSphereColors[0]);
+              g.addColorStop(0.55, toPlanet.planetSphereColors[1]);
+              g.addColorStop(1, toPlanet.planetSphereColors[2]);
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(viewW / 2, ty, radius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          const shakeX = p < 0.28 ? (Math.random() - 0.5) * 4 * (1 - p / 0.28) : 0;
+          const shakeY = p < 0.28 ? (Math.random() - 0.5) * 4 * (1 - p / 0.28) : 0;
+          const shipY =
+            p < 0.25
+              ? viewH * 0.62 - (p / 0.25) * (viewH * 0.14)
+              : p < 0.75
+              ? viewH * 0.48
+              : viewH * 0.48 + ((p - 0.75) / 0.25) * (viewH * 0.04);
+
+          if (p < 0.22) {
+            ctx.strokeStyle = `rgba(251,191,36,${(1 - p / 0.22) * 0.65})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(viewW / 2, viewH * 0.66, 25 + p * 750, 10 + p * 260, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          const trailY = shipSprites.moving ? shipY + 52 * 1.2 : shipY + 14;
+          const exLen = 50 + warp * 110;
+          const eg = ctx.createLinearGradient(viewW / 2, trailY, viewW / 2, trailY + exLen);
+          eg.addColorStop(0, shipSprites.moving ? 'rgba(251,191,36,0.75)' : '#FFFFFF');
+          eg.addColorStop(0.28, '#38BDF8');
+          eg.addColorStop(0.65, '#F59E0B');
+          eg.addColorStop(1, 'rgba(245,158,11,0)');
+          ctx.fillStyle = eg;
+          ctx.beginPath();
+          ctx.moveTo(viewW / 2 - 10, trailY);
+          ctx.lineTo(viewW / 2 + 10, trailY);
+          ctx.lineTo(viewW / 2, trailY + exLen);
+          ctx.closePath();
+          ctx.fill();
+
+          drawShip(viewW / 2 + shakeX, shipY + shakeY, -Math.PI / 2, true, true, 1.2, toPlanet.accentColor);
+
+          if (p >= 1 && transition.active) {
+            transition.active = false;
+            state.planetId = transition.to;
+            ship.x = WORLD_WIDTH / 2;
+            ship.y = WORLD_HEIGHT / 2;
+            ship.vx = 0;
+            ship.vy = 0;
+            ship.angle = -Math.PI / 2;
+            ship.boostEnergy = 100;
+            ship.hull = 100;
+            ship.invulnTimer = 1.0;
+            camera.x = ship.x;
+            camera.y = ship.y;
+            particles = [];
+            packets = [];
+            asteroids = [];
+            asteroidSpawnTimer = 2.4;
+            screenShake = 0;
+            audio.playArrival();
+            state.phase = 'PLAYING';
+            saveState();
+            syncUI();
+          }
+        }
+
+        let lastTime = performance.now();
+        let uiTimer = 0;
+
+        function loop(now) {
+          const dt = Math.min(0.05, (now - lastTime) / 1000);
+          lastTime = now;
+
+          ctx.save();
+          ctx.scale(dpr, dpr);
+
+          if (state.phase === 'TAKEOFF_TRANSITION') {
+            renderTransition(now);
+            ctx.restore();
+            requestAnimationFrame(loop);
+            return;
+          }
+
+          const planet = PLANETS[state.planetId];
+          const objs = state.objectsByPlanet[state.planetId];
+          const crystals = state.crystalsByPlanet[state.planetId];
+
+          if (state.phase === 'PLAYING') {
+            let ax = 0;
+            let ay = 0;
+            if (keys['ArrowUp'] || keys['KeyW']) ay -= 1;
+            if (keys['ArrowDown'] || keys['KeyS']) ay += 1;
+            if (keys['ArrowLeft'] || keys['KeyA']) ax -= 1;
+            if (keys['ArrowRight'] || keys['KeyD']) ax += 1;
+
+            if (ax === 0 && ay === 0 && pointer.active) {
+              const wx = pointer.x - viewW / 2 + camera.x;
+              const wy = pointer.y - viewH / 2 + camera.y;
+              const dx = wx - ship.x;
+              const dy = wy - ship.y;
+              const d = Math.hypot(dx, dy);
+              if (d > 18) {
+                ax = dx / d;
+                ay = dy / d;
+              }
+            }
+
+            const mag = Math.hypot(ax, ay);
+            ship.thrusting = mag > 0.05;
+            ship.boosting = Boolean(keys['Space']) && ship.thrusting && ship.boostEnergy > 4;
+
+            if (ship.boosting) ship.boostEnergy = Math.max(0, ship.boostEnergy - dt * 36);
+            else ship.boostEnergy = Math.min(100, ship.boostEnergy + dt * 18);
+
+            if (ship.thrusting) {
+              const nx = ax / mag;
+              const ny = ay / mag;
+              const accel = ship.boosting ? 920 : 540;
+              ship.vx += nx * accel * dt;
+              ship.vy += ny * accel * dt;
+              let diff = Math.atan2(ny, nx) - ship.angle;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              ship.angle += diff * Math.min(1, dt * 12);
+
+              if (Math.random() < (ship.boosting ? 0.9 : 0.55)) {
+                particles.push({
+                  x: ship.x - Math.cos(ship.angle) * 16,
+                  y: ship.y - Math.sin(ship.angle) * 16,
+                  vx: -Math.cos(ship.angle) * (80 + Math.random() * 60),
+                  vy: -Math.sin(ship.angle) * (80 + Math.random() * 60),
+                  life: 0.45,
+                  maxLife: 0.45,
+                  size: ship.boosting ? 4.5 : 3,
+                  color: ship.boosting ? '#38BDF8' : planet.dustColor,
+                });
+              }
+            }
+
+            const drag = Math.pow(0.08, dt);
+            ship.vx *= drag;
+            ship.vy *= drag;
+            const maxSpeed = ship.boosting ? 470 : 300;
+            const spd = Math.hypot(ship.vx, ship.vy);
+            if (spd > maxSpeed) {
+              ship.vx = (ship.vx / spd) * maxSpeed;
+              ship.vy = (ship.vy / spd) * maxSpeed;
+            }
+
+            ship.x = Math.max(48, Math.min(WORLD_WIDTH - 48, ship.x + ship.vx * dt));
+            ship.y = Math.max(48, Math.min(WORLD_HEIGHT - 48, ship.y + ship.vy * dt));
+
+            // Crystals
+            let changed = false;
+            crystals.forEach((c) => {
+              if (c.collected) return;
+              const dx = ship.x - c.x;
+              const dy = ship.y - c.y;
+              const d = Math.hypot(dx, dy);
+              if (d < CRYSTAL_COLLECT_RANGE) {
+                c.collected = true;
+                state.score += c.value;
+                changed = true;
+                audio.playPickup();
+                for (let i = 0; i < 10; i++) {
+                  const a = (Math.PI * 2 * i) / 10;
+                  particles.push({
+                    x: c.x,
+                    y: c.y,
+                    vx: Math.cos(a) * 80,
+                    vy: Math.sin(a) * 80,
+                    life: 0.45,
+                    maxLife: 0.45,
+                    size: 3,
+                    color: planet.crystalColor,
+                  });
+                }
+              } else if (d < CRYSTAL_MAGNET_RANGE) {
+                const pull = (1 - d / CRYSTAL_MAGNET_RANGE) * 260;
+                c.x += (dx / d) * pull * dt;
+                c.y += (dy / d) * pull * dt;
+              }
+            });
+
+            // Advance moving satellites / probes along their orbital trajectories
+            objs.forEach((obj) => {
+              const prevX = obj.x;
+              const prevY = obj.y;
+              obj.orbitAngle += obj.orbitSpeed * dt;
+              obj.x = obj.orbitCenterX + Math.cos(obj.orbitAngle) * obj.orbitRadiusX;
+              obj.y = obj.orbitCenterY + Math.sin(obj.orbitAngle) * obj.orbitRadiusY;
+              if (dt > 0.0001) {
+                obj.vx = (obj.x - prevX) / dt;
+                obj.vy = (obj.y - prevY) / dt;
+              }
+            });
+
+            // Sequential rescue object (one by one)
+            tickCooldown = Math.max(0, tickCooldown - dt);
+            const activeIdx = objs.findIndex((o) => !o.discovered);
+            const activeObj = activeIdx >= 0 ? objs[activeIdx] : null;
+            if (activeObj && !activeObj.discovered) {
+              const d = Math.hypot(ship.x - activeObj.x, ship.y - activeObj.y);
+              if (d <= RESCUE_RANGE) {
+                activeObj.downloadProgress = Math.min(1, activeObj.downloadProgress + dt * 0.30);
+                if (Math.random() < 0.25) {
+                  packets.push({
+                    fromX: activeObj.x,
+                    fromY: activeObj.y,
+                    progress: 0,
+                    speed: 2.4,
+                    color: planet.accentColor,
+                  });
+                }
+                if (tickCooldown <= 0) {
+                  audio.playTick(activeObj.downloadProgress);
+                  tickCooldown = 0.16;
+                }
+                if (activeObj.downloadProgress >= 1) {
+                  activeObj.discovered = true;
+                  state.score += activeObj.points;
+                  ship.hull = Math.min(100, ship.hull + 25);
+                  changed = true;
+                  audio.playRescued();
+                  for (let i = 0; i < 18; i++) {
+                    const a = (Math.PI * 2 * i) / 18;
+                    particles.push({
+                      x: activeObj.x,
+                      y: activeObj.y,
+                      vx: Math.cos(a) * 110,
+                      vy: Math.sin(a) * 110,
+                      life: 0.7,
+                      maxLife: 0.7,
+                      size: 4,
+                      color: '#10B981',
+                    });
+                  }
+
+                  const nextObj = objs[activeIdx + 1];
+                  if (nextObj) {
+                    for (let i = 0; i < 14; i++) {
+                      const a = (Math.PI * 2 * i) / 14;
+                      particles.push({
+                        x: nextObj.x,
+                        y: nextObj.y,
+                        vx: Math.cos(a) * 95,
+                        vy: Math.sin(a) * 95,
+                        life: 0.6,
+                        maxLife: 0.6,
+                        size: 3.5,
+                        color: planet.accentColor,
+                      });
+                    }
+                  }
+                  asteroidSpawnTimer = Math.max(asteroidSpawnTimer, 1.35);
+
+                  const entry = {
+                    id: `log-${activeObj.id}-${Date.now()}`,
+                    objectId: activeObj.id,
+                    planet: planet.id,
+                    planetName: planet.name,
+                    objectName: activeObj.name,
+                    sector: activeObj.sector,
+                    frequency: activeObj.frequency,
+                    transmissionTitle: activeObj.transmissionTitle,
+                    transmissionSummary: activeObj.transmissionSummary,
+                    telemetryReading: activeObj.telemetryReading,
+                    pointsEarned: activeObj.points,
+                    timestamp: new Date().toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    }),
+                  };
+                  state.logEntries.unshift(entry);
+                  showToast(activeObj, planet);
+
+                  const totalAll =
+                    state.objectsByPlanet.moon.filter((x) => x.discovered).length +
+                    state.objectsByPlanet.mars.filter((x) => x.discovered).length;
+                  if (totalAll === 8 && !state.allCompletedShown) {
+                    setTimeout(() => {
+                      state.allCompletedShown = true;
+                      state.phase = 'ALL_COMPLETED';
+                      elVictoryScore.textContent = state.score.toLocaleString('es-MX');
+                      saveState();
+                      syncUI();
+                    }, 1100);
+                  }
+                }
+              } else if (activeObj.downloadProgress > 0) {
+                activeObj.downloadProgress = Math.max(0, activeObj.downloadProgress - dt * 0.16);
+              }
+            }
+
+            // Undertale-style high-speed asteroid/meteor spawning:
+            // Rolls a random number from 1 to 3 each cycle until 3 comes up, then spawns a meteor
+            ship.invulnTimer = Math.max(0, ship.invulnTimer - dt);
+            screenShake = Math.max(0, screenShake - dt);
+
+            asteroidSpawnTimer -= dt;
+            if (asteroidSpawnTimer <= 0) {
+              const isMars = planet.id === 'mars';
+              const maxConcurrent = isMars ? 3 : 2;
+
+              if (asteroids.length >= maxConcurrent) {
+                asteroidSpawnTimer = 0.8;
+              } else {
+                const numeroAleatorio = Math.floor(Math.random() * 3) + 1;
+
+                if (numeroAleatorio === 3) {
+                  asteroidSpawnTimer = isMars ? 1.6 : 2.0;
+
+                  const aimX = ship.x + ship.vx * 0.24 + (Math.random() - 0.5) * 85;
+                  const aimY = ship.y + ship.vy * 0.24 + (Math.random() - 0.5) * 85;
+
+                  let angle = Math.random() * Math.PI * 2;
+                  const warningAngles = asteroids
+                    .filter((a) => a.phase === 'WARNING')
+                    .map((a) => Math.atan2(a.uy, a.ux));
+                  for (let attempt = 0; attempt < 5; attempt++) {
+                    const cand = Math.random() * Math.PI * 2;
+                    const tooClose = warningAngles.some((wa) => {
+                      let d = Math.abs(cand - wa);
+                      if (d > Math.PI) d = Math.PI * 2 - d;
+                      return d < 0.65;
+                    });
+                    if (!tooClose) {
+                      angle = cand;
+                      break;
+                    }
+                  }
+
+                  const ux = Math.cos(angle);
+                  const uy = Math.sin(angle);
+                  const startX = aimX - ux * 880;
+                  const startY = aimY - uy * 880;
+                  const speed = (isMars ? 940 : 880) + Math.random() * 200;
+                  const warnDur = isMars ? 0.82 : 0.90;
+
+                  asteroids.push({
+                    phase: 'WARNING',
+                    warningTimer: warnDur,
+                    warningDuration: warnDur,
+                    startX,
+                    startY,
+                    x: startX,
+                    y: startY,
+                    ux,
+                    uy,
+                    vx: ux * speed,
+                    vy: uy * speed,
+                    speed,
+                    radius: 26 + Math.random() * 10,
+                    rotation: Math.random() * Math.PI * 2,
+                    spinSpeed: (Math.random() < 0.5 ? -1 : 1) * (2.5 + Math.random() * 3.5),
+                    traveled: 0,
+                  });
+                  audio.playAlert();
+                } else {
+                  asteroidSpawnTimer = isMars ? 1.35 : 1.6;
+                }
+              }
+            }
+
+            asteroids = asteroids.filter((ast) => {
+              if (ast.phase === 'WARNING') {
+                ast.warningTimer -= dt;
+                if (ast.warningTimer <= 0) ast.phase = 'FLYING';
+                return true;
+              }
+              const step = ast.speed * dt;
+              ast.x += ast.vx * dt;
+              ast.y += ast.vy * dt;
+              ast.rotation += ast.spinSpeed * dt;
+              ast.traveled += step;
+
+              if (Math.random() < 0.65) {
+                particles.push({
+                  x: ast.x - ast.ux * ast.radius * 0.7 + (Math.random() - 0.5) * 14,
+                  y: ast.y - ast.uy * ast.radius * 0.7 + (Math.random() - 0.5) * 14,
+                  vx: -ast.vx * 0.12 + (Math.random() - 0.5) * 45,
+                  vy: -ast.vy * 0.12 + (Math.random() - 0.5) * 45,
+                  life: 0.35,
+                  maxLife: 0.35,
+                  size: 3.5,
+                  color: Math.random() < 0.45 ? '#F87171' : '#9CA3AF',
+                });
+              }
+
+              if (ship.invulnTimer <= 0) {
+                const distToShip = Math.hypot(ship.x - ast.x, ship.y - ast.y);
+                if (distToShip < ast.radius + 17) {
+                  ship.invulnTimer = 1.4;
+                  ship.hull = Math.max(0, ship.hull - 25);
+                  screenShake = 0.36;
+
+                  const nx = (ship.x - ast.x) / Math.max(1, distToShip);
+                  const ny = (ship.y - ast.y) / Math.max(1, distToShip);
+                  ship.vx += ast.vx * 0.28 + nx * 240;
+                  ship.vy += ast.vy * 0.28 + ny * 240;
+
+                  audio.playImpact();
+                  for (let i = 0; i < 20; i++) {
+                    const a = (Math.PI * 2 * i) / 20;
+                    particles.push({
+                      x: ship.x,
+                      y: ship.y,
+                      vx: Math.cos(a) * (80 + Math.random() * 110),
+                      vy: Math.sin(a) * (80 + Math.random() * 110),
+                      life: 0.55,
+                      maxLife: 0.55,
+                      size: 4,
+                      color: i % 2 === 0 ? '#EF4444' : '#FBBF24',
+                    });
+                  }
+
+                  if (ship.hull <= 0) {
+                    state.phase = 'SHIP_DESTROYED';
+                    asteroids = [];
+                  }
+                  changed = true;
+                  return false;
+                }
+              }
+              return ast.traveled < 2100;
+            });
+
+            if (changed) {
+              saveState();
+              syncUI();
+            }
+          } else {
+            asteroids = [];
+          }
+
+          camera.x += (ship.x - camera.x) * Math.min(1, dt * 7);
+          camera.y += (ship.y - camera.y) * Math.min(1, dt * 7);
+          const shakeOffset = screenShake > 0 ? screenShake * 24 : 0;
+          const renderCamX = camera.x + (Math.random() - 0.5) * shakeOffset;
+          const renderCamY = camera.y + (Math.random() - 0.5) * shakeOffset;
+
+          uiTimer += dt;
+          if (uiTimer > 0.1) {
+            uiTimer = 0;
+            elBoostFill.style.width = `${Math.round(ship.boostEnergy)}%`;
+            elBoostLabel.textContent = `${Math.round(ship.boostEnergy)}%`;
+            syncUI();
+          }
+
+          // Render planetary world
+          ctx.fillStyle = '#05070B';
+          ctx.fillRect(0, 0, viewW, viewH);
+
+          stars.forEach((s) => {
+            const sx = (((s.x * 2000 - renderCamX * 0.15) % viewW) + viewW) % viewW;
+            const sy = (((s.y * 1500 - renderCamY * 0.15) % viewH) + viewH) % viewH;
+            ctx.fillStyle = `rgba(226,232,240,${s.alpha * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, s.size * 0.75, 0, Math.PI * 2);
+            ctx.fill();
+          });
+
+          ctx.save();
+          ctx.translate(viewW / 2 - renderCamX, viewH / 2 - renderCamY);
+
+          const cxW = WORLD_WIDTH / 2;
+          const cyW = WORLD_HEIGHT / 2;
+
+          ctx.strokeStyle = planet.gridColor;
+          ctx.lineWidth = 1;
+          for (let gx = 180; gx < WORLD_WIDTH; gx += 180) {
+            ctx.beginPath();
+            ctx.moveTo(gx, 24);
+            ctx.lineTo(gx, WORLD_HEIGHT - 24);
+            ctx.stroke();
+          }
+          for (let gy = 180; gy < WORLD_HEIGHT; gy += 180) {
+            ctx.beginPath();
+            ctx.moveTo(24, gy);
+            ctx.lineTo(WORLD_WIDTH - 24, gy);
+            ctx.stroke();
+          }
+
+          ctx.save();
+          ctx.strokeStyle = planet.id === 'moon' ? 'rgba(56,189,248,0.25)' : 'rgba(251,146,60,0.28)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([14, 10]);
+          ctx.beginPath();
+          ctx.roundRect(24, 24, WORLD_WIDTH - 48, WORLD_HEIGHT - 48, 36);
+          ctx.stroke();
+          ctx.restore();
+
+          const rad = planet.mapRadius || 640;
+          ctx.save();
+          ctx.strokeStyle = planet.id === 'moon' ? 'rgba(148,163,184,0.14)' : 'rgba(251,146,60,0.16)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([8, 12]);
+          ctx.beginPath();
+          ctx.arc(cxW, cyW, rad + 240, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          const aura = ctx.createRadialGradient(cxW, cyW, rad * 0.65, cxW, cyW, rad * 1.18);
+          aura.addColorStop(0, planet.atmosphereGlow);
+          aura.addColorStop(1, 'rgba(5,7,11,0)');
+          ctx.fillStyle = aura;
+          ctx.beginPath();
+          ctx.arc(cxW, cyW, rad * 1.18, 0, Math.PI * 2);
+          ctx.fill();
+
+          const pSprite = planetSprites[planet.id];
+          if (pSprite) {
+            ctx.drawImage(pSprite, cxW - rad, cyW - rad, rad * 2, rad * 2);
+          } else {
+            ctx.fillStyle = planet.surfaceBaseColor;
+            ctx.beginPath();
+            ctx.arc(cxW, cyW, rad, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          crystals.forEach((c) => {
+            if (c.collected) return;
+            const bob = Math.sin(now * 0.004 + c.pulseOffset) * 2.5;
+            ctx.save();
+            ctx.translate(c.x, c.y + bob);
+            ctx.fillStyle = planet.id === 'moon' ? 'rgba(56,189,248,0.16)' : 'rgba(251,191,36,0.18)';
+            ctx.beginPath();
+            ctx.arc(0, 0, 14, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = planet.crystalColor;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(6, 0);
+            ctx.lineTo(0, 8);
+            ctx.lineTo(-6, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          });
+
+          const renderActiveObj = objs.find((o) => !o.discovered) || null;
+          if (renderActiveObj) {
+            ctx.save();
+            ctx.strokeStyle =
+              planet.id === 'moon' ? 'rgba(34,211,238,0.16)' : 'rgba(251,191,36,0.17)';
+            ctx.lineWidth = 1.25;
+            ctx.setLineDash([7, 9]);
+            ctx.beginPath();
+            ctx.ellipse(
+              renderActiveObj.orbitCenterX,
+              renderActiveObj.orbitCenterY,
+              renderActiveObj.orbitRadiusX,
+              renderActiveObj.orbitRadiusY,
+              0,
+              0,
+              Math.PI * 2
+            );
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          objs.forEach((obj) => {
+            if (!obj.discovered && (!renderActiveObj || obj.id !== renderActiveObj.id)) return;
+            ctx.save();
+            ctx.translate(obj.x, obj.y);
+            if (!obj.discovered) {
+              const pulse = (now * 0.0015 + (obj.x % 7)) % 1;
+              for (let r = 0; r < 2; r++) {
+                const rp = (pulse + r * 0.5) % 1;
+                const rad = 24 + rp * 95;
+                ctx.strokeStyle =
+                  planet.id === 'moon'
+                    ? `rgba(34,211,238,${((1 - rp) * 0.38).toFixed(3)})`
+                    : `rgba(251,191,36,${((1 - rp) * 0.38).toFixed(3)})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, rad, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+            }
+            ctx.fillStyle = 'rgba(15,23,42,0.85)';
+            ctx.strokeStyle = obj.discovered ? '#10B981' : planet.accentColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = obj.discovered ? '#10B981' : planet.accentColor;
+            ctx.beginPath();
+            ctx.arc(0, 0, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (!obj.discovered && obj.downloadProgress > 0) {
+              ctx.strokeStyle = '#10B981';
+              ctx.lineWidth = 3.5;
+              ctx.beginPath();
+              ctx.arc(0, 0, 29, -Math.PI / 2, -Math.PI / 2 + obj.downloadProgress * Math.PI * 2);
+              ctx.stroke();
+            }
+
+            ctx.font = '600 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = obj.discovered ? '#6EE7B7' : '#F1F5F9';
+            ctx.fillText(obj.name, 0, 40);
+            ctx.font = '500 10px monospace';
+            ctx.fillStyle = obj.discovered ? '#10B981' : '#94A3B8';
+            ctx.fillText(
+              obj.discovered
+                ? 'DATOS EN BITÁCORA'
+                : obj.downloadProgress > 0
+                ? `TRANSMITIENDO ${Math.round(obj.downloadProgress * 100)}%`
+                : obj.frequency,
+              0,
+              54
+            );
+            ctx.restore();
+
+            if (!obj.discovered && obj.downloadProgress > 0) {
+              ctx.save();
+              ctx.strokeStyle = planet.id === 'moon' ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.55)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([6, 6]);
+              ctx.lineDashOffset = -(now * 0.06);
+              ctx.beginPath();
+              ctx.moveTo(obj.x, obj.y);
+              ctx.lineTo(ship.x, ship.y);
+              ctx.stroke();
+              ctx.restore();
+            }
+          });
+
+          packets = packets.filter((p) => {
+            p.progress += dt * p.speed;
+            if (p.progress >= 1) return false;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.fromX + (ship.x - p.fromX) * p.progress, p.fromY + (ship.y - p.fromY) * p.progress, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            return true;
+          });
+
+          particles = particles.filter((p) => {
+            p.life -= dt;
+            if (p.life <= 0) return false;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            return true;
+          });
+
+          // Draw Undertale-style warning corridors and fast incoming asteroids
+          asteroids.forEach((ast) => {
+            if (ast.phase === 'WARNING') {
+              const urgent = ast.warningTimer < 0.32;
+              const blink = urgent
+                ? Math.floor(now / 65) % 2 === 0
+                  ? 1
+                  : 0.35
+                : 0.45 + 0.35 * Math.sin(now * 0.02);
+
+              const endX = ast.startX + ast.ux * 2100;
+              const endY = ast.startY + ast.uy * 2100;
+
+              ctx.save();
+              ctx.strokeStyle = urgent
+                ? `rgba(251, 191, 36, ${(0.22 * blink).toFixed(3)})`
+                : `rgba(239, 68, 68, ${(0.16 * blink).toFixed(3)})`;
+              ctx.lineWidth = ast.radius * 2;
+              ctx.beginPath();
+              ctx.moveTo(ast.startX, ast.startY);
+              ctx.lineTo(endX, endY);
+              ctx.stroke();
+
+              ctx.strokeStyle = urgent
+                ? `rgba(251, 191, 36, ${(0.9 * blink).toFixed(3)})`
+                : `rgba(248, 113, 113, ${(0.72 * blink).toFixed(3)})`;
+              ctx.lineWidth = urgent ? 2.5 : 1.75;
+              ctx.setLineDash([16, 12]);
+              ctx.lineDashOffset = -(now * 0.14);
+              ctx.beginPath();
+              ctx.moveTo(ast.startX, ast.startY);
+              ctx.lineTo(endX, endY);
+              ctx.stroke();
+              ctx.restore();
+            } else {
+              ctx.save();
+              ctx.translate(ast.x, ast.y);
+
+              const glow = ctx.createRadialGradient(0, 0, ast.radius * 0.4, 0, 0, ast.radius * 1.45);
+              glow.addColorStop(0, 'rgba(239, 68, 68, 0.36)');
+              glow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+              ctx.fillStyle = glow;
+              ctx.beginPath();
+              ctx.arc(0, 0, ast.radius * 1.45, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.rotate(ast.rotation);
+              if (asteroidSprite) {
+                const drawDim = ast.radius * 2.25;
+                ctx.drawImage(asteroidSprite, -drawDim / 2, -drawDim / 2, drawDim, drawDim);
+              } else {
+                ctx.fillStyle = '#9CA3AF';
+                ctx.strokeStyle = '#EF4444';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+              }
+              ctx.restore();
+            }
+          });
+
+          const invulnBlink = ship.invulnTimer > 0 && Math.floor(now / 85) % 2 === 0;
+          if (!invulnBlink) {
+            drawShip(ship.x, ship.y, ship.angle, ship.thrusting, ship.boosting, 1, planet.accentColor);
+          }
+
+          if (renderActiveObj) {
+            const minD = Math.hypot(renderActiveObj.x - ship.x, renderActiveObj.y - ship.y);
+            if (minD > 180) {
+              const a = Math.atan2(renderActiveObj.y - ship.y, renderActiveObj.x - ship.x);
+              ctx.save();
+              ctx.translate(ship.x + Math.cos(a) * 46, ship.y + Math.sin(a) * 46);
+              ctx.rotate(a);
+              ctx.fillStyle = planet.accentColor;
+              ctx.beginPath();
+              ctx.moveTo(7, 0);
+              ctx.lineTo(-4, -4);
+              ctx.lineTo(-4, 4);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          ctx.restore(); // end world camera transform
+
+          // Screen-space Undertale-style "!" proximity alert boxes clamped to viewport entry edge
+          asteroids.forEach((ast) => {
+            if (ast.phase !== 'WARNING') return;
+            const urgent = ast.warningTimer < 0.32;
+            const flashOn = urgent ? Math.floor(now / 65) % 2 === 0 : Math.floor(now / 130) % 2 === 0;
+
+            const sx0 = ast.startX - renderCamX + viewW / 2;
+            const sy0 = ast.startY - renderCamY + viewH / 2;
+            const pad = 34;
+
+            let entryT = -1;
+            for (let t = 0; t <= 2200; t += 16) {
+              const px = sx0 + ast.ux * t;
+              const py = sy0 + ast.uy * t;
+              if (px >= pad && px <= viewW - pad && py >= pad && py <= viewH - pad) {
+                entryT = t;
+                break;
+              }
+            }
+            if (entryT < 0) return;
+
+            const ix = Math.max(pad, Math.min(viewW - pad, sx0 + ast.ux * entryT));
+            const iy = Math.max(pad, Math.min(viewH - pad, sy0 + ast.uy * entryT));
+
+            ctx.save();
+            ctx.translate(ix, iy);
+
+            const pulse = 1 - ast.warningTimer / ast.warningDuration;
+            ctx.strokeStyle = urgent ? '#FBBF24' : '#EF4444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, 17 + (1 - pulse) * 10, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = flashOn ? (urgent ? '#FBBF24' : '#EF4444') : '#1E293B';
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(-13, -13, 26, 26, 5);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = flashOn ? '#090D16' : '#F87171';
+            ctx.font = '800 17px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('!', 0, 1);
+
+            ctx.rotate(Math.atan2(ast.uy, ast.ux));
+            ctx.fillStyle = urgent ? '#FBBF24' : '#F87171';
+            ctx.beginPath();
+            ctx.moveTo(24, 0);
+            ctx.lineTo(16, -5);
+            ctx.lineTo(16, 5);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+          });
+
+          ctx.restore();
+
+          drawRadar();
+          drawMinimap();
+          requestAnimationFrame(loop);
+        }
+
+        syncUI();
+        requestAnimationFrame(loop);
+      })();
+    </script>
+  </body>
+</html>
