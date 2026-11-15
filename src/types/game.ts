@@ -3,8 +3,11 @@ export type PlanetId = 'moon' | 'mars';
 export type GamePhase =
   | 'MENU'
   | 'PLAYING'
+  | 'PAUSED'
+  | 'STORY_POPUP'
   | 'TAKEOFF_TRANSITION'
   | 'SHIP_DESTROYED'
+  | 'OUT_OF_FUEL'
   | 'ALL_COMPLETED';
 
 export type ObjectShape = 'probe' | 'beacon' | 'rover' | 'seismic';
@@ -32,6 +35,8 @@ export interface RescueObject {
   telemetryReading: string;
   discovered: boolean;
   downloadProgress: number; // 0 to 1
+  storyTitle?: string;
+  storyImageUrl?: string;
 }
 
 export interface CrystalNode {

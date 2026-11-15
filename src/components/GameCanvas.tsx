@@ -24,8 +24,12 @@ interface GameCanvasProps {
   crystals: CrystalNode[];
   transitionState: TransitionState | null;
   onCrystalCollect: (crystalId: string, value: number) => void;
-  onObjectRescued: (objectId: string) => void;
+  onObjectRescued: (
+    objectId: string,
+    nextObjectPlacement?: { id: string; orbitAngle: number; x: number; y: number }
+  ) => void;
   onShipDamaged: (remainingHull: number) => void;
+  onOutOfFuel: () => void;
   onShipTelemetryUpdate: (
     coords: { x: number; y: number },
     boostEnergy: number,
@@ -95,6 +99,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onCrystalCollect,
   onObjectRescued,
   onShipDamaged,
+  onOutOfFuel,
   onShipTelemetryUpdate,
   onTransitionProgress,
   onTransitionComplete,
@@ -113,6 +118,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     onCrystalCollect,
     onObjectRescued,
     onShipDamaged,
+    onOutOfFuel,
     onShipTelemetryUpdate,
     onTransitionProgress,
     onTransitionComplete,
@@ -127,6 +133,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     onCrystalCollect,
     onObjectRescued,
     onShipDamaged,
+    onOutOfFuel,
     onShipTelemetryUpdate,
     onTransitionProgress,
     onTransitionComplete,
@@ -146,6 +153,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const starsRef = useRef<Star[]>([]);
   const cameraRef = useRef({ x: planet.worldWidth / 2, y: planet.worldHeight / 2 });
   const downloadTickSoundCooldownRef = useRef(0);
+  const lowFuelBeepCooldownRef = useRef(0);
+  const outOfFuelTimerRef = useRef(0);
   const transitionClockRef = useRef<{ startTime: number; active: boolean }>({
     startTime: 0,
     active: false,
@@ -153,6 +162,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const asteroidsRef = useRef<AsteroidHazard[]>([]);
   const asteroidSpawnTimerRef = useRef(2.4);
   const screenShakeRef = useRef(0);
+  const rescuedIdsRef = useRef<Set<string>>(new Set());
   const asteroidSpriteRef = useRef<HTMLCanvasElement | null>(null);
   const planetSpritesRef = useRef<Record<PlanetId, HTMLCanvasElement | null>>({
     moon: null,
@@ -637,7 +647,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     screenShakeRef.current = 0;
   }, [planet.id, planet.worldWidth, planet.worldHeight]);
 
-  // Reset transition clock & hazards when phase changes
+  // Keep local rescuedIdsRef synced with React state (clears on reset, tracks discovered)
+  useEffect(() => {
+    if (objects.every((o) => !o.discovered)) {
+      rescuedIdsRef.current.clear();
+    } else {
+      objects.forEach((o) => {
+        if (o.discovered) rescuedIdsRef.current.add(o.id);
+      });
+    }
+  }, [objects, planet.id]);
+
+  // Reset transition clock, controls & hazards when phase changes
   useEffect(() => {
     if (phase === 'TAKEOFF_TRANSITION') {
       transitionClockRef.current = {
@@ -647,10 +668,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       particlesRef.current = [];
       packetsRef.current = [];
       asteroidsRef.current = [];
+      keysRef.current = {};
+      pointerSteerRef.current.active = false;
+      outOfFuelTimerRef.current = 0;
     } else {
       transitionClockRef.current.active = false;
-      if (phase !== 'PLAYING') {
-        asteroidsRef.current = [];
+      if (phase === 'PLAYING') {
+        outOfFuelTimerRef.current = 0;
+      } else {
+        // Keep active asteroids frozen during PAUSED or STORY_POPUP; clear on hard transitions/modals
+        if (phase !== 'PAUSED' && phase !== 'STORY_POPUP') {
+          asteroidsRef.current = [];
+        }
+        keysRef.current = {};
+        pointerSteerRef.current.active = false;
       }
     }
   }, [phase]);
@@ -1057,34 +1088,55 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw Collectible Crystals
+      // Draw Collectible Gasoline Canisters
       crystalsRef.current.forEach((crystal) => {
         if (crystal.collected) return;
         const bob = Math.sin(now * 0.004 + crystal.pulseOffset) * 2.5;
+        const pulse = 0.75 + 0.25 * Math.sin(now * 0.006 + crystal.pulseOffset);
         ctx.save();
         ctx.translate(crystal.x, crystal.y + bob);
 
-        // Glow aura
-        ctx.fillStyle =
-          activePlanet.id === 'moon'
-            ? 'rgba(56, 189, 248, 0.16)'
-            : 'rgba(251, 191, 36, 0.18)';
+        // High-contrast beacon halo (emerald-lime pops on both grey Moon and orange Mars)
+        ctx.fillStyle = `rgba(16, 185, 129, ${(0.22 * pulse).toFixed(3)})`;
         ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.arc(0, 0, 17, 0, Math.PI * 2);
         ctx.fill();
 
-        // Faceted crystal diamond
-        ctx.fillStyle = activePlanet.crystalColor;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(52, 211, 153, ${(0.55 * pulse).toFixed(3)})`;
+        ctx.lineWidth = 1.25;
         ctx.beginPath();
-        ctx.moveTo(0, -8);
-        ctx.lineTo(6, 0);
-        ctx.lineTo(0, 8);
-        ctx.lineTo(-6, 0);
-        ctx.closePath();
+        ctx.arc(0, 0, 13.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Dark backing pill for readability against bright planet surface
+        ctx.fillStyle = '#07090E';
+        ctx.beginPath();
+        ctx.roundRect(-8, -9, 16, 18, 3.5);
+        ctx.fill();
+
+        // Jerrycan / fuel canister body
+        ctx.fillStyle = '#10B981';
+        ctx.strokeStyle = '#ECFDF5';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.roundRect(-6.5, -5.5, 13, 13, 2.5);
         ctx.fill();
         ctx.stroke();
+
+        // Angled golden fuel nozzle & cap at top
+        ctx.fillStyle = '#FACC15';
+        ctx.fillRect(-4.5, -8.5, 4.5, 3);
+        ctx.fillStyle = '#064E3B';
+        ctx.fillRect(1, -4, 3.5, 2.5);
+
+        // Fuel droplet / stripe mark on canister center
+        ctx.fillStyle = '#ECFDF5';
+        ctx.beginPath();
+        ctx.moveTo(0, -1.5);
+        ctx.lineTo(3, 3.2);
+        ctx.arc(0, 3.2, 3, 0, Math.PI);
+        ctx.closePath();
+        ctx.fill();
 
         ctx.restore();
       });
@@ -1171,21 +1223,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       });
 
       // Draw Undertale-style proximity warning lanes & fast incoming asteroids
+      // Use high-contrast electric cyan/ice-white + dark outline on Mars so it pops against orange terrain
+      const isMarsHazard = activePlanet.id === 'mars';
       asteroidsRef.current.forEach((ast) => {
         if (ast.phase === 'WARNING') {
           const urgent = ast.warningTimer < 0.32;
           const blink = urgent
             ? Math.floor(now / 65) % 2 === 0
               ? 1
-              : 0.35
-            : 0.45 + 0.35 * Math.sin(now * 0.02);
+              : 0.42
+            : 0.55 + 0.35 * Math.sin(now * 0.02);
 
           const endX = ast.startX + ast.ux * 2100;
           const endY = ast.startY + ast.uy * 2100;
 
-          // Translucent corridor band showing exact asteroid width
           ctx.save();
-          ctx.strokeStyle = urgent
+          // Dark contrast corridor backing on Mars so warning lane cuts cleanly through orange dust
+          if (isMarsHazard) {
+            ctx.strokeStyle = `rgba(5, 8, 15, ${(0.34 * blink).toFixed(3)})`;
+            ctx.lineWidth = ast.radius * 2.1;
+            ctx.beginPath();
+            ctx.moveTo(ast.startX, ast.startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+          }
+
+          // Translucent corridor band showing exact asteroid width
+          ctx.strokeStyle = isMarsHazard
+            ? urgent
+              ? `rgba(236, 254, 255, ${(0.28 * blink).toFixed(3)})`
+              : `rgba(34, 211, 238, ${(0.25 * blink).toFixed(3)})`
+            : urgent
             ? `rgba(251, 191, 36, ${(0.22 * blink).toFixed(3)})`
             : `rgba(239, 68, 68, ${(0.16 * blink).toFixed(3)})`;
           ctx.lineWidth = ast.radius * 2;
@@ -1194,11 +1262,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.lineTo(endX, endY);
           ctx.stroke();
 
+          // Dark under-stroke behind laser line on Mars
+          if (isMarsHazard) {
+            ctx.strokeStyle = `rgba(5, 8, 15, ${(0.7 * blink).toFixed(3)})`;
+            ctx.lineWidth = urgent ? 5 : 4;
+            ctx.setLineDash([16, 12]);
+            ctx.lineDashOffset = -(now * 0.14);
+            ctx.beginPath();
+            ctx.moveTo(ast.startX, ast.startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+          }
+
           // Sharp center danger laser line
-          ctx.strokeStyle = urgent
+          ctx.strokeStyle = isMarsHazard
+            ? urgent
+              ? `rgba(236, 254, 255, ${(0.98 * blink).toFixed(3)})`
+              : `rgba(34, 211, 238, ${(0.95 * blink).toFixed(3)})`
+            : urgent
             ? `rgba(251, 191, 36, ${(0.9 * blink).toFixed(3)})`
             : `rgba(248, 113, 113, ${(0.72 * blink).toFixed(3)})`;
-          ctx.lineWidth = urgent ? 2.5 : 1.75;
+          ctx.lineWidth = urgent ? 2.75 : 2;
           ctx.setLineDash([16, 12]);
           ctx.lineDashOffset = -(now * 0.14);
           ctx.beginPath();
@@ -1211,14 +1295,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.save();
           ctx.translate(ast.x, ast.y);
 
-          // Red-amber danger halo behind rock
-          const glow = ctx.createRadialGradient(0, 0, ast.radius * 0.4, 0, 0, ast.radius * 1.45);
-          glow.addColorStop(0, 'rgba(239, 68, 68, 0.36)');
-          glow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+          // High-contrast danger halo behind rock (electric cyan on Mars, red on Moon)
+          const glow = ctx.createRadialGradient(0, 0, ast.radius * 0.4, 0, 0, ast.radius * 1.5);
+          glow.addColorStop(0, isMarsHazard ? 'rgba(34, 211, 238, 0.5)' : 'rgba(239, 68, 68, 0.36)');
+          glow.addColorStop(1, isMarsHazard ? 'rgba(34, 211, 238, 0)' : 'rgba(239, 68, 68, 0)');
           ctx.fillStyle = glow;
           ctx.beginPath();
-          ctx.arc(0, 0, ast.radius * 1.45, 0, Math.PI * 2);
+          ctx.arc(0, 0, ast.radius * 1.5, 0, Math.PI * 2);
           ctx.fill();
+
+          if (isMarsHazard) {
+            ctx.strokeStyle = 'rgba(103, 232, 249, 0.8)';
+            ctx.lineWidth = 1.75;
+            ctx.beginPath();
+            ctx.arc(0, 0, ast.radius + 4, 0, Math.PI * 2);
+            ctx.stroke();
+          }
 
           ctx.rotate(ast.rotation);
           const aSprite = asteroidSpriteRef.current;
@@ -1227,7 +1319,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             ctx.drawImage(aSprite, -drawDim / 2, -drawDim / 2, drawDim, drawDim);
           } else {
             ctx.fillStyle = '#9CA3AF';
-            ctx.strokeStyle = '#EF4444';
+            ctx.strokeStyle = isMarsHazard ? '#22D3EE' : '#EF4444';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
@@ -1307,26 +1399,56 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.save();
         ctx.translate(ix, iy);
 
-        // Pulsing danger ring
+        const primaryCol = isMarsHazard
+          ? urgent
+            ? '#ECFEFF'
+            : '#22D3EE'
+          : urgent
+          ? '#FBBF24'
+          : '#EF4444';
+        const secondaryCol = isMarsHazard
+          ? urgent
+            ? '#CFFAFE'
+            : '#67E8F9'
+          : urgent
+          ? '#FBBF24'
+          : '#F87171';
+
+        // Pulsing danger ring with dark contrast halo on Mars
         const pulse = 1 - ast.warningTimer / ast.warningDuration;
-        ctx.strokeStyle = urgent ? '#FBBF24' : '#EF4444';
-        ctx.lineWidth = 2;
+        if (isMarsHazard) {
+          ctx.strokeStyle = 'rgba(5, 8, 15, 0.85)';
+          ctx.lineWidth = 4.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, 17 + (1 - pulse) * 10, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = primaryCol;
+        ctx.lineWidth = 2.25;
         ctx.beginPath();
         ctx.arc(0, 0, 17 + (1 - pulse) * 10, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Crisp square/diamond Undertale alert box
-        ctx.fillStyle = flashOn ? (urgent ? '#FBBF24' : '#EF4444') : '#1E293B';
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1.5;
+        // High-contrast alert box
+        ctx.fillStyle = flashOn ? primaryCol : '#07090E';
+        ctx.strokeStyle = isMarsHazard ? '#07090E' : '#FFFFFF';
+        ctx.lineWidth = isMarsHazard ? 2.5 : 1.5;
         ctx.beginPath();
-        ctx.roundRect(-13, -13, 26, 26, 5);
+        ctx.roundRect(-14, -14, 28, 28, 6);
         ctx.fill();
         ctx.stroke();
 
+        if (isMarsHazard && !flashOn) {
+          ctx.strokeStyle = '#22D3EE';
+          ctx.lineWidth = 1.75;
+          ctx.beginPath();
+          ctx.roundRect(-13, -13, 26, 26, 5);
+          ctx.stroke();
+        }
+
         // Exclamation mark "!"
-        ctx.fillStyle = flashOn ? '#090D16' : '#F87171';
-        ctx.font = '800 17px "Chakra Petch", sans-serif';
+        ctx.fillStyle = flashOn ? '#07090E' : secondaryCol;
+        ctx.font = '800 18px "Patrick Hand", "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('!', 0, 1);
@@ -1334,13 +1456,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         // Directional arrow pointing along asteroid travel direction
         const arrowAngle = Math.atan2(ast.uy, ast.ux);
         ctx.rotate(arrowAngle);
-        ctx.fillStyle = urgent ? '#FBBF24' : '#F87171';
+        ctx.fillStyle = secondaryCol;
+        ctx.strokeStyle = '#07090E';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(24, 0);
-        ctx.lineTo(16, -5);
-        ctx.lineTo(16, 5);
+        ctx.moveTo(25, 0);
+        ctx.lineTo(16, -6);
+        ctx.lineTo(16, 6);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
 
         ctx.restore();
       });
@@ -1586,15 +1711,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
 
         const inputMag = Math.hypot(ax, ay);
-        ship.thrusting = inputMag > 0.05;
+        const hasFuel = ship.boostEnergy > 0;
+        ship.thrusting = inputMag > 0.05 && hasFuel;
 
         const wantBoost = Boolean(keys['Space']) && ship.thrusting && ship.boostEnergy > 4;
         ship.boosting = wantBoost;
 
-        if (wantBoost) {
-          ship.boostEnergy = Math.max(0, ship.boostEnergy - dt * 36);
-        } else {
-          ship.boostEnergy = Math.min(100, ship.boostEnergy + dt * 18);
+        // Gasoline burns whenever the ship moves/thrusts; no free auto-recharge
+        if (ship.thrusting) {
+          const fuelDrainRate = wantBoost ? 9.6 : 4.6;
+          ship.boostEnergy = Math.max(0, ship.boostEnergy - dt * fuelDrainRate);
+        }
+
+        lowFuelBeepCooldownRef.current = Math.max(0, lowFuelBeepCooldownRef.current - dt);
+        if (
+          ship.thrusting &&
+          ship.boostEnergy > 0 &&
+          ship.boostEnergy <= 25 &&
+          lowFuelBeepCooldownRef.current <= 0
+        ) {
+          soundEngine.playLowFuelAlert();
+          lowFuelBeepCooldownRef.current = 4.2;
         }
 
         if (ship.thrusting) {
@@ -1659,7 +1796,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ship.vy = -Math.abs(ship.vy) * 0.35;
         }
 
-        // Crystal magnetic attraction & collection
+        // Trigger Out-of-Fuel emergency modal if tank hits 0 and ship slows/stalls
+        if (ship.boostEnergy <= 0) {
+          if (outOfFuelTimerRef.current >= 0) {
+            outOfFuelTimerRef.current += dt;
+            if (
+              (speed < 45 && outOfFuelTimerRef.current >= 0.85) ||
+              outOfFuelTimerRef.current >= 2.1
+            ) {
+              outOfFuelTimerRef.current = -1;
+              callbacksRef.current.onOutOfFuel();
+            }
+          }
+        } else {
+          outOfFuelTimerRef.current = 0;
+        }
+
+        // Fuel canister magnetic attraction & collection (+36% gasolina)
         crystalsRef.current.forEach((crystal) => {
           if (crystal.collected) return;
           const dx = ship.x - crystal.x;
@@ -1668,9 +1821,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
           if (dist < CRYSTAL_COLLECT_RANGE) {
             crystal.collected = true;
+            ship.boostEnergy = Math.min(100, ship.boostEnergy + 36);
+            outOfFuelTimerRef.current = 0;
             soundEngine.playCrystalPickup();
-            for (let i = 0; i < 10; i++) {
-              const a = (Math.PI * 2 * i) / 10;
+            for (let i = 0; i < 12; i++) {
+              const a = (Math.PI * 2 * i) / 12;
               particlesRef.current.push({
                 x: crystal.x,
                 y: crystal.y,
@@ -1678,8 +1833,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 vy: Math.sin(a) * (45 + Math.random() * 55),
                 life: 0.45,
                 maxLife: 0.45,
-                size: 3,
-                color: activePlanet.crystalColor,
+                size: 3.2,
+                color: i % 2 === 0 ? '#34D399' : '#FACC15',
               });
             }
             callbacksRef.current.onCrystalCollect(crystal.id, crystal.value);
@@ -1709,7 +1864,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           downloadTickSoundCooldownRef.current - dt
         );
 
-        const activeIdx = objectsRef.current.findIndex((o) => !o.discovered);
+        const activeIdx = objectsRef.current.findIndex(
+          (o) => !o.discovered && !rescuedIdsRef.current.has(o.id)
+        );
         const activeObj = activeIdx >= 0 ? objectsRef.current[activeIdx] : null;
         if (activeObj && !activeObj.discovered) {
           const dist = Math.hypot(ship.x - activeObj.x, ship.y - activeObj.y);
@@ -1734,7 +1891,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             }
 
             if (nextProgress >= 1) {
-              activeObj.discovered = true;
+              rescuedIdsRef.current.add(activeObj.id);
               soundEngine.playObjectRescued();
               for (let i = 0; i < 18; i++) {
                 const a = (Math.PI * 2 * i) / 18;
@@ -1750,9 +1907,41 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 });
               }
 
-              // Materialize the next sequential object cleanly with a brief asteroid breather
+              // Place next sequential object on the far side of its orbit relative to player ship
               const nextObj = objectsRef.current[activeIdx + 1];
+              let nextPlacement:
+                | { id: string; orbitAngle: number; x: number; y: number }
+                | undefined;
+
               if (nextObj) {
+                let bestAngle = nextObj.orbitAngle;
+                let bestDist = -1;
+                let bestX = nextObj.x;
+                let bestY = nextObj.y;
+                const steps = 24;
+                for (let s = 0; s < steps; s++) {
+                  const candAngle = (Math.PI * 2 * s) / steps;
+                  const cx = nextObj.orbitCenterX + Math.cos(candAngle) * nextObj.orbitRadiusX;
+                  const cy = nextObj.orbitCenterY + Math.sin(candAngle) * nextObj.orbitRadiusY;
+                  const d = Math.hypot(cx - ship.x, cy - ship.y);
+                  if (d > bestDist) {
+                    bestDist = d;
+                    bestAngle = candAngle;
+                    bestX = cx;
+                    bestY = cy;
+                  }
+                }
+                nextObj.orbitAngle = bestAngle;
+                nextObj.x = bestX;
+                nextObj.y = bestY;
+                nextObj.downloadProgress = 0;
+                nextPlacement = {
+                  id: nextObj.id,
+                  orbitAngle: bestAngle,
+                  x: bestX,
+                  y: bestY,
+                };
+
                 for (let i = 0; i < 14; i++) {
                   const a = (Math.PI * 2 * i) / 14;
                   particlesRef.current.push({
@@ -1769,7 +1958,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               }
               asteroidSpawnTimerRef.current = Math.max(asteroidSpawnTimerRef.current, 1.35);
 
-              callbacksRef.current.onObjectRescued(activeObj.id);
+              callbacksRef.current.onObjectRescued(activeObj.id, nextPlacement);
             }
           } else if (activeObj.downloadProgress > 0) {
             activeObj.downloadProgress = Math.max(0, activeObj.downloadProgress - dt * 0.16);
@@ -1940,7 +2129,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         renderCamX,
         renderCamY,
         now,
-        dt
+        phaseRef.current === 'PLAYING' ? dt : 0
       );
 
       ctx.restore();

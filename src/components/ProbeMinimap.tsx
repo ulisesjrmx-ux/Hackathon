@@ -1,5 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { CrystalNode, PlanetConfig, RescueObject, ShipState } from '../types/game';
+import {
+  drawCrayonCircle,
+  drawCrayonDiamond,
+  drawCrayonDot,
+  drawCrayonEllipse,
+  drawCrayonLine,
+  drawCrayonPaperBackdrop,
+  drawCrayonRect,
+  drawCrayonShip,
+  drawCrayonSweep,
+} from '../utils/crayonCanvas';
 
 interface ProbeMinimapProps {
   planet: PlanetConfig;
@@ -39,8 +50,10 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
       const activePlanet = planetRef.current;
       const ship = shipRef.current;
       const objs = objectsRef.current;
+      const isMoon = activePlanet.id === 'moon';
+      const primaryColor = isMoon ? '#38BDF8' : '#FBBF24';
 
-      const pad = 6;
+      const pad = 7;
       const mapW = w - pad * 2;
       const mapH = h - pad * 2;
       const toX = (wx: number) => pad + (wx / activePlanet.worldWidth) * mapW;
@@ -49,193 +62,173 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
 
       ctx.clearRect(0, 0, w, h);
 
-      // Deep space minimap backing
-      ctx.fillStyle = '#060910';
+      // Dark notebook paper minimap backdrop
+      ctx.fillStyle = '#0B101C';
       ctx.fillRect(0, 0, w, h);
+      drawCrayonPaperBackdrop(ctx, w, h, primaryColor);
 
-      // Outer navigable sector rectangle
-      ctx.strokeStyle =
-        activePlanet.id === 'moon'
-          ? 'rgba(56, 189, 248, 0.25)'
-          : 'rgba(251, 146, 60, 0.28)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(pad, pad, mapW, mapH);
+      // Hand-drawn outer crayon border rectangle
+      drawCrayonRect(
+        ctx,
+        pad,
+        pad,
+        mapW,
+        mapH,
+        isMoon ? 'rgba(56, 189, 248, 0.55)' : 'rgba(251, 191, 36, 0.55)',
+        1.8,
+        4.2,
+        1.2
+      );
 
       const cx = toX(activePlanet.worldWidth / 2);
       const cy = toY(activePlanet.worldHeight / 2);
       const planetR = (activePlanet.mapRadius ?? 640) * scaleAvg;
 
-      // Planet silhouette on minimap
-      ctx.fillStyle =
-        activePlanet.id === 'moon'
-          ? 'rgba(148, 163, 184, 0.18)'
-          : 'rgba(234, 88, 12, 0.2)';
-      ctx.strokeStyle =
-        activePlanet.id === 'moon'
-          ? 'rgba(203, 213, 225, 0.35)'
-          : 'rgba(251, 146, 60, 0.42)';
-      ctx.lineWidth = 1;
+      // Planet silhouette with crayon-shaded interior & sketchy outline
+      ctx.fillStyle = isMoon ? 'rgba(148, 163, 184, 0.16)' : 'rgba(234, 88, 12, 0.22)';
       ctx.beginPath();
       ctx.arc(cx, cy, planetR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
+      drawCrayonCircle(
+        ctx,
+        cx,
+        cy,
+        planetR,
+        isMoon ? '#CBD5E1' : '#FB923C',
+        1.7,
+        2.3,
+        1.3,
+        false,
+        0.65
+      );
 
-      // Orbital ring outside planet
-      ctx.save();
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
-      ctx.beginPath();
-      ctx.arc(cx, cy, ((activePlanet.mapRadius ?? 640) + 240) * scaleAvg, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
+      // Outer orbital crayon dashed ring
+      drawCrayonCircle(
+        ctx,
+        cx,
+        cy,
+        ((activePlanet.mapRadius ?? 640) + 240) * scaleAvg,
+        'rgba(148, 163, 184, 0.35)',
+        1.3,
+        6.1,
+        1.2,
+        true
+      );
 
-      // Active sequential target (appears one by one)
+      // Active sequential target
       const activeObj = objs.find((o) => !o.discovered) ?? null;
 
-      // Faint orbital trajectory for active sequential probe
+      // Faint hand-drawn orbital trajectory for active sequential probe
       if (activeObj) {
-        ctx.save();
-        ctx.strokeStyle =
-          activePlanet.id === 'moon'
-            ? 'rgba(34, 211, 238, 0.14)'
-            : 'rgba(251, 191, 36, 0.16)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.ellipse(
+        drawCrayonEllipse(
+          ctx,
           toX(activeObj.orbitCenterX),
           toY(activeObj.orbitCenterY),
           activeObj.orbitRadiusX * scaleAvg,
           activeObj.orbitRadiusY * (mapH / activePlanet.worldHeight),
-          0,
-          0,
-          Math.PI * 2
+          isMoon ? 'rgba(56, 189, 248, 0.28)' : 'rgba(251, 191, 36, 0.3)',
+          1.2,
+          7.4,
+          1.1,
+          true
         );
-        ctx.stroke();
-        ctx.restore();
       }
 
-      // Radar sweep centered on ship
+      // Crayon radar sweep centered on ship
       sweepAngle = (sweepAngle + 0.045) % (Math.PI * 2);
       const shipMx = toX(ship.x);
       const shipMy = toY(ship.y);
-      const sweepR = 54;
+      const sweepR = 52;
 
       ctx.save();
       ctx.beginPath();
       ctx.rect(pad, pad, mapW, mapH);
       ctx.clip();
-
-      const rgb =
-        activePlanet.id === 'moon' ? 'rgba(34, 211, 238,' : 'rgba(251, 191, 36,';
-      for (let i = 0; i < 10; i++) {
-        const a0 = sweepAngle - (i / 10) * 0.65;
-        const a1 = sweepAngle - ((i + 1) / 10) * 0.65;
-        ctx.fillStyle = `${rgb} ${((1 - i / 10) * 0.16).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.moveTo(shipMx, shipMy);
-        ctx.arc(shipMx, shipMy, sweepR, a1, a0);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.strokeStyle = `${rgb} 0.65)`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(shipMx, shipMy);
-      ctx.lineTo(
-        shipMx + Math.cos(sweepAngle) * sweepR,
-        shipMy + Math.sin(sweepAngle) * sweepR
+      drawCrayonSweep(
+        ctx,
+        shipMx,
+        shipMy,
+        sweepR,
+        sweepAngle,
+        0.65,
+        isMoon ? 'rgba(56, 189, 248,' : 'rgba(251, 191, 36,',
+        isMoon ? '#67E8F9' : '#FDE047'
       );
-      ctx.stroke();
       ctx.restore();
 
-      // Uncollected crystals
-      crystalsRef.current.forEach((c) => {
+      // Uncollected gasoline canisters (vivid green crayon dots)
+      const lowFuel = ship.boostEnergy <= 25;
+      const fuelPulse = lowFuel ? 0.5 + 0.5 * Math.sin(performance.now() * 0.01) : 1;
+      crystalsRef.current.forEach((c, idx) => {
         if (c.collected) return;
-        ctx.fillStyle =
-          activePlanet.id === 'moon'
-            ? 'rgba(56, 189, 248, 0.45)'
-            : 'rgba(251, 191, 36, 0.45)';
-        ctx.fillRect(toX(c.x) - 1, toY(c.y) - 1, 2, 2);
+        drawCrayonDot(
+          ctx,
+          toX(c.x),
+          toY(c.y),
+          lowFuel ? 2.6 : 2.1,
+          `rgba(74, 222, 128, ${(lowFuel ? 0.55 + fuelPulse * 0.45 : 0.88).toFixed(3)})`,
+          '#ECFDF5',
+          idx + 3
+        );
       });
 
-      // Vector line to current active probe
+      // Crayon dashed vector line to current active probe
       const activeDist = activeObj
         ? Math.hypot(activeObj.x - ship.x, activeObj.y - ship.y)
         : 0;
 
       if (activeObj) {
-        ctx.save();
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle =
-          activePlanet.id === 'moon'
-            ? 'rgba(34, 211, 238, 0.4)'
-            : 'rgba(251, 191, 36, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(shipMx, shipMy);
-        ctx.lineTo(toX(activeObj.x), toY(activeObj.y));
-        ctx.stroke();
-        ctx.restore();
+        drawCrayonLine(
+          ctx,
+          shipMx,
+          shipMy,
+          toX(activeObj.x),
+          toY(activeObj.y),
+          isMoon ? 'rgba(103, 232, 249, 0.6)' : 'rgba(253, 224, 71, 0.65)',
+          1.35,
+          8.2,
+          1.0,
+          true
+        );
       }
 
       // Draw discovered probes and ONLY the current active sequential probe
       const now = performance.now();
-      objs.forEach((obj) => {
+      objs.forEach((obj, idx) => {
         if (!obj.discovered && obj.id !== activeObj?.id) return;
         const ox = toX(obj.x);
         const oy = toY(obj.y);
 
         if (obj.discovered) {
-          ctx.fillStyle = '#10B981';
-          ctx.beginPath();
-          ctx.arc(ox, oy, 2.8, 0, Math.PI * 2);
-          ctx.fill();
+          drawCrayonDot(ctx, ox, oy, 3, '#34D399', '#ECFDF5', idx + 19);
         } else {
           const pulse = 0.5 + 0.5 * Math.sin(now * 0.006);
-          ctx.strokeStyle =
-            activePlanet.id === 'moon'
-              ? `rgba(34, 211, 238, ${0.35 + pulse * 0.5})`
-              : `rgba(251, 191, 36, ${0.35 + pulse * 0.5})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.arc(ox, oy, 4 + pulse * 3, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.fillStyle = activePlanet.id === 'moon' ? '#22D3EE' : '#FBBF24';
-          ctx.save();
-          ctx.translate(ox, oy);
-          ctx.rotate(Math.PI / 4);
-          ctx.fillRect(-2.5, -2.5, 5, 5);
-          ctx.restore();
+          drawCrayonCircle(
+            ctx,
+            ox,
+            oy,
+            4.8 + pulse * 3,
+            isMoon ? '#67E8F9' : '#FDE047',
+            1.35,
+            idx + 9,
+            0.9,
+            false,
+            0.4 + pulse * 0.5
+          );
+          drawCrayonDiamond(ctx, ox, oy, 3.8, primaryColor, '#FFFBEB');
         }
       });
 
-      // Player ship chevron on minimap
-      ctx.save();
-      ctx.translate(shipMx, shipMy);
-      ctx.rotate(ship.angle);
-      ctx.fillStyle = '#F8FAFC';
-      ctx.strokeStyle = '#0F172A';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(5.5, 0);
-      ctx.lineTo(-4, -3.5);
-      ctx.lineTo(-2, 0);
-      ctx.lineTo(-4, 3.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      // Player ship chevron drawn in yellow crayon
+      drawCrayonShip(ctx, shipMx, shipMy, ship.angle, 0.85, '#FEF08A', '#090D16');
 
-      // Update compact readout line without triggering React renders
       if (infoRef.current) {
         if (activeObj) {
           infoRef.current.textContent = `Objetivo actual: ${Math.round(activeDist)} m`;
-          infoRef.current.style.color =
-            activePlanet.id === 'moon' ? '#67E8F9' : '#FCD34D';
+          infoRef.current.style.color = isMoon ? '#7DD3FC' : '#FDE047';
         } else {
           infoRef.current.textContent = '4/4 sondas escaneadas';
-          infoRef.current.style.color = '#34D399';
+          infoRef.current.style.color = '#6EE7B7';
         }
       }
 
@@ -247,29 +240,32 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
   }, [shipRef]);
 
   const rescued = objects.filter((o) => o.discovered).length;
+  const boxTone = planet.id === 'moon' ? 'crayon-box-moon' : 'crayon-box-mars';
 
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 bg-[#0B0F17]/92 border border-slate-800/90 rounded-lg p-2.5 shadow-xl backdrop-blur-xs">
-      <div className="flex items-center justify-between gap-3 mb-1.5 px-0.5">
-        <span className="font-display text-[11px] font-semibold tracking-wide text-slate-200">
+    <div
+      className={`pointer-events-none absolute bottom-3 right-3 crayon-box ${boxTone} p-2.5 shadow-xl`}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1 px-0.5">
+        <span className="font-crayon text-sm font-bold tracking-wide text-slate-100">
           Radar de Sondas
         </span>
-        <span className="font-mono-tabular text-[11px] text-slate-400">
+        <span className="font-mono-tabular text-[11px] text-slate-300">
           {rescued}/4
         </span>
       </div>
 
       <canvas
         ref={canvasRef}
-        width={182}
-        height={154}
-        className="block rounded border border-slate-800/80"
-        aria-label="Minimapa radar de sondas en movimiento"
+        width={184}
+        height={156}
+        className="block rounded-lg"
+        aria-label="Minimapa radar estilo crayola"
       />
 
       <div
         ref={infoRef}
-        className="font-mono-tabular text-[10px] text-slate-400 mt-1.5 px-0.5 truncate max-w-[182px]"
+        className="font-crayon text-xs text-slate-300 mt-1 px-0.5 truncate max-w-[184px]"
       >
         Escaneando sector...
       </div>

@@ -10,6 +10,40 @@ export const SHIP_THRUST_IMAGE_URL =
   '/assets/aistudio/WhatsApp_Image_2026-11-14_at_4.04.09_PM_109ec7cb.jpeg';
 export const ASTEROID_IMAGE_URL =
   '/assets/aistudio/image_ac8dfdf7.png';
+export const APOLLO_STORY_IMAGE_URL =
+  '/assets/aistudio/WhatsApp_Image_2026-11-15_at_11.55.45_AM_c6d47da0.jpeg';
+export const LRV_STORY_IMAGE_URL =
+  '/assets/aistudio/WhatsApp_Image_2026-11-15_at_12.39.09_PM_8adbbf3c.jpeg';
+export const ALSEP_STORY_IMAGE_URL =
+  '/assets/aistudio/WhatsApp_Image_2026-11-15_at_12.30.01_PM__1__a9fd61f2.jpeg';
+export const SURVEYOR_STORY_IMAGE_URL =
+  '/assets/aistudio/WhatsApp_Image_2026-11-15_at_12.18.43_PM_fa122400.jpeg';
+
+export const STORY_POPUP_BY_OBJECT_ID: Record<
+  string,
+  { kicker: string; title: string; imageUrl: string }
+> = {
+  'moon-obj-1': {
+    kicker: 'Archivo Histórico Recuperado · La Luna',
+    title: 'Apolo 11 · Módulo "Eagle"',
+    imageUrl: APOLLO_STORY_IMAGE_URL,
+  },
+  'moon-obj-2': {
+    kicker: 'Archivo Histórico Recuperado · La Luna',
+    title: 'Apolo 15 · Lunar Roving Vehicle (LRV)',
+    imageUrl: LRV_STORY_IMAGE_URL,
+  },
+  'moon-obj-3': {
+    kicker: 'Archivo Histórico Recuperado · La Luna',
+    title: 'Apolo 12 · Módulo Lunar / ALSEP',
+    imageUrl: ALSEP_STORY_IMAGE_URL,
+  },
+  'moon-obj-4': {
+    kicker: 'Archivo Histórico Recuperado · La Luna',
+    title: 'Surveyor 3 · Landers',
+    imageUrl: SURVEYOR_STORY_IMAGE_URL,
+  },
+};
 
 export const PLANETS: Record<PlanetId, PlanetConfig> = {
   moon: {
@@ -70,77 +104,77 @@ export const INITIAL_RESCUE_OBJECTS: Record<PlanetId, RescueObject[]> = {
     {
       id: 'moon-obj-1',
       planet: 'moon',
-      name: 'Sonda Lunokhod-X',
-      sector: 'Borde Norte Tranquilidad',
+      name: 'Apollo Lunar Modules',
+      sector: 'Mare Tranquillitatis',
       orbitCenterX: CX - 40,
       orbitCenterY: CY - 30,
-      orbitRadiusX: 340,
-      orbitRadiusY: 250,
-      orbitSpeed: 0.16,
+      orbitRadiusX: 460,
+      orbitRadiusY: 360,
+      orbitSpeed: 0.14,
       orbitAngle: 3.85,
-      x: CX - 40 + Math.cos(3.85) * 340,
-      y: CY - 30 + Math.sin(3.85) * 250,
-      shape: 'rover',
-      frequency: '142.8 MHz',
+      x: CX - 40 + Math.cos(3.85) * 460,
+      y: CY - 30 + Math.sin(3.85) * 360,
+      shape: 'probe',
+      frequency: '2282.5 MHz',
       points: 250,
-      transmissionTitle: 'Muestra de Regolito Basáltico',
+      transmissionTitle: 'Telemetría de Descenso Lunar',
       transmissionSummary:
-        'La sonda transmitió espectros de titanio e ilmenita en el estrato superior, confirmando depósitos aprovechables para blindaje lunar.',
-      telemetryReading: 'TiO₂: 8.4% · FeO: 17.2% · Radiación: 0.38 mSv/h',
+        'Etapa de descenso recuperó los registros del alunizaje tripulado, control térmico de cabina y análisis inicial de rocas basálticas.',
+      telemetryReading: 'Descenso: Nominal · Muestras: 21.5 kg · O₂: 100%',
       discovered: false,
       downloadProgress: 0,
     },
     {
       id: 'moon-obj-2',
       planet: 'moon',
-      name: 'Baliza Apolo-19',
-      sector: 'Cuenca Este',
+      name: 'Lunar Roving Vehicles (LRVs)',
+      sector: 'Rima Hadley / Apeninos',
       orbitCenterX: CX + 40,
       orbitCenterY: CY - 20,
-      orbitRadiusX: 480,
-      orbitRadiusY: 360,
-      orbitSpeed: -0.14,
+      orbitRadiusX: 580,
+      orbitRadiusY: 450,
+      orbitSpeed: -0.12,
       orbitAngle: -0.65,
-      x: CX + 40 + Math.cos(-0.65) * 480,
-      y: CY - 20 + Math.sin(-0.65) * 360,
-      shape: 'beacon',
-      frequency: '218.4 MHz',
+      x: CX + 40 + Math.cos(-0.65) * 580,
+      y: CY - 20 + Math.sin(-0.65) * 450,
+      shape: 'rover',
+      frequency: '2265.0 MHz',
       points: 250,
-      transmissionTitle: 'Registro de Viento Solar',
+      transmissionTitle: 'Registro de Travesía Lunar',
       transmissionSummary:
-        'Baliza orbital recuperada con 400 horas de lectura de partículas alfa y flujo de Helio-3 atrapado en la superficie lunar.',
-      telemetryReading: 'He-3: 18.6 ppb · Flujo Solar: 412 km/s',
+        'El vehículo eléctrico transmitió datos de tracción en regolito fino, navegación inercial y rutas geológicas de largo alcance.',
+      telemetryReading: 'Recorrido: 35.9 km · Batería AgZn: 36 V · Vel: 13 km/h',
       discovered: false,
       downloadProgress: 0,
     },
     {
       id: 'moon-obj-3',
       planet: 'moon',
-      name: 'Reflector Sísmico Selene',
-      sector: 'Fosa Meridional',
+      name: 'ALSEP Scientific Packages',
+      sector: 'Oceanus Procellarum',
       orbitCenterX: CX,
       orbitCenterY: CY + 40,
-      orbitRadiusX: 390,
-      orbitRadiusY: 300,
-      orbitSpeed: 0.19,
+      orbitRadiusX: 650,
+      orbitRadiusY: 510,
+      orbitSpeed: 0.15,
       orbitAngle: 2.35,
-      x: CX + Math.cos(2.35) * 390,
-      y: CY + 40 + Math.sin(2.35) * 300,
+      x: CX + Math.cos(2.35) * 650,
+      y: CY + 40 + Math.sin(2.35) * 510,
       shape: 'seismic',
-      frequency: '305.1 MHz',
+      frequency: '2278.5 MHz',
       points: 250,
-      transmissionTitle: 'Actividad Tectónica Lunar',
+      transmissionTitle: 'Estación Geofísica y Sísmica Lunar',
       transmissionSummary:
-        'Detectó tres micro-sismos lunares profundos a 850 km bajo la corteza, calibrando con precisión la estructura del manto.',
-      telemetryReading: 'Magnitud: 1.9 Mw · Profundidad: 842 km',
+        'Conjunto de experimentos superficiales que registró micro-sismos profundos, flujo térmico del subsuelo y densidad del viento solar.',
+      telemetryReading: 'Sismos: 1.9 Mw · Flujo Térmico: 21 mW/m² · RTG: Activo',
       discovered: false,
       downloadProgress: 0,
     },
     {
       id: 'moon-obj-4',
       planet: 'moon',
-      name: 'Cápsula Criogénica Tycho',
-      sector: 'Órbita Exterior Sur',
+      name: 'Surveyor Landers',
+      sector: 'Cráter Tycho / Órbita Sur',
       orbitCenterX: CX,
       orbitCenterY: CY,
       orbitRadiusX: 880,
@@ -149,13 +183,13 @@ export const INITIAL_RESCUE_OBJECTS: Record<PlanetId, RescueObject[]> = {
       orbitAngle: 0.72,
       x: CX + Math.cos(0.72) * 880,
       y: CY + Math.sin(0.72) * 740,
-      shape: 'probe',
-      frequency: '412.6 MHz',
+      shape: 'beacon',
+      frequency: '2295.0 MHz',
       points: 250,
-      transmissionTitle: 'Reserva de Hielo Subsuperficial',
+      transmissionTitle: 'Reconocimiento de Suelo y Superficie',
       transmissionSummary:
-        'Confirmó bolsas de hielo cristalino en micro-cráteres en sombra permanente, vital para producción de oxígeno y propelente.',
-      telemetryReading: 'H₂O Sólida: 5.7% masa · Temp: -188 °C',
+        'Aterrizador robótico previo al programa Apolo que comprobó la firmeza del polvo lunar y transmitió miles de fotografías panorámicas.',
+      telemetryReading: 'Carga Suelo: 34 kPa · Panorámicas: 11,150 · -145 °C',
       discovered: false,
       downloadProgress: 0,
     },
@@ -168,12 +202,12 @@ export const INITIAL_RESCUE_OBJECTS: Record<PlanetId, RescueObject[]> = {
       sector: 'Delta Occidental',
       orbitCenterX: CX - 30,
       orbitCenterY: CY - 20,
-      orbitRadiusX: 360,
-      orbitRadiusY: 260,
-      orbitSpeed: -0.15,
+      orbitRadiusX: 470,
+      orbitRadiusY: 360,
+      orbitSpeed: -0.13,
       orbitAngle: 3.7,
-      x: CX - 30 + Math.cos(3.7) * 360,
-      y: CY - 20 + Math.sin(3.7) * 260,
+      x: CX - 30 + Math.cos(3.7) * 470,
+      y: CY - 20 + Math.sin(3.7) * 360,
       shape: 'rover',
       frequency: '164.2 MHz',
       points: 300,
@@ -191,12 +225,12 @@ export const INITIAL_RESCUE_OBJECTS: Record<PlanetId, RescueObject[]> = {
       sector: 'Llanura Óxido Norte',
       orbitCenterX: CX + 30,
       orbitCenterY: CY,
-      orbitRadiusX: 460,
-      orbitRadiusY: 380,
-      orbitSpeed: 0.14,
+      orbitRadiusX: 580,
+      orbitRadiusY: 460,
+      orbitSpeed: 0.12,
       orbitAngle: -0.7,
-      x: CX + 30 + Math.cos(-0.7) * 460,
-      y: CY + Math.sin(-0.7) * 380,
+      x: CX + 30 + Math.cos(-0.7) * 580,
+      y: CY + Math.sin(-0.7) * 460,
       shape: 'beacon',
       frequency: '248.9 MHz',
       points: 300,
@@ -214,12 +248,12 @@ export const INITIAL_RESCUE_OBJECTS: Record<PlanetId, RescueObject[]> = {
       sector: 'Cañón Meridional',
       orbitCenterX: CX,
       orbitCenterY: CY + 30,
-      orbitRadiusX: 390,
-      orbitRadiusY: 300,
-      orbitSpeed: -0.18,
+      orbitRadiusX: 650,
+      orbitRadiusY: 500,
+      orbitSpeed: -0.15,
       orbitAngle: 2.2,
-      x: CX + Math.cos(2.2) * 390,
-      y: CY + 30 + Math.sin(2.2) * 300,
+      x: CX + Math.cos(2.2) * 650,
+      y: CY + 30 + Math.sin(2.2) * 500,
       shape: 'seismic',
       frequency: '332.0 MHz',
       points: 300,
@@ -298,21 +332,24 @@ export function generatePlanetRidges(planet: PlanetId): RidgeFeature[] {
   return ridges;
 }
 
+export const FUEL_NODE_COUNT = 10;
+
 export function generatePlanetCrystals(planet: PlanetId): CrystalNode[] {
   const rng = createRng(planet === 'moon' ? 51203 : 74819);
   const crystals: CrystalNode[] = [];
-  const count = 22;
+  const count = FUEL_NODE_COUNT;
 
   for (let i = 0; i < count; i++) {
-    // 14 crystals on the planet surface, 8 floating in the orbital space outside the planet!
-    const inOrbit = i >= 14;
-    const angle = rng() * Math.PI * 2;
+    // 6 fuel canisters distributed across planet surface, 4 in outer orbital space (kept scarce)
+    const inOrbit = i >= 6;
+    const baseAngle = ((Math.PI * 2) / (inOrbit ? 4 : 6)) * (inOrbit ? i - 6 : i);
+    const angle = baseAngle + (rng() - 0.5) * 0.45;
     const dist = inOrbit
-      ? PLANET_VISUAL_RADIUS + 80 + rng() * 260
-      : 150 + rng() * (PLANET_VISUAL_RADIUS - 210);
+      ? PLANET_VISUAL_RADIUS + 95 + rng() * 220
+      : 210 + rng() * (PLANET_VISUAL_RADIUS - 270);
 
     crystals.push({
-      id: `${planet}-crystal-${i}`,
+      id: `${planet}-fuel-${i}`,
       x: CX + Math.cos(angle) * dist,
       y: CY + Math.sin(angle) * dist,
       value: planet === 'moon' ? 50 : 75,
@@ -321,4 +358,30 @@ export function generatePlanetCrystals(planet: PlanetId): CrystalNode[] {
     });
   }
   return crystals;
+}
+
+export function pickFuelRespawnCoords(shipX: number, shipY: number): { x: number; y: number } {
+  let bestX = CX + 450;
+  let bestY = CY;
+  let bestDist = -1;
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const inOrbit = Math.random() < 0.4;
+    const distFromCenter = inOrbit
+      ? PLANET_VISUAL_RADIUS + 95 + Math.random() * 210
+      : 220 + Math.random() * (PLANET_VISUAL_RADIUS - 270);
+    const cx = CX + Math.cos(angle) * distFromCenter;
+    const cy = CY + Math.sin(angle) * distFromCenter;
+    const d = Math.hypot(cx - shipX, cy - shipY);
+    if (d >= 420 && d <= 920) {
+      return { x: cx, y: cy };
+    }
+    if (d > bestDist) {
+      bestDist = d;
+      bestX = cx;
+      bestY = cy;
+    }
+  }
+  return { x: bestX, y: bestY };
 }

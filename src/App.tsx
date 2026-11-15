@@ -3,8 +3,9 @@ import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
-  Download,
-  Flame,
+  Fuel,
+  Pause,
+  Play,
   Radio,
   Rocket,
   RotateCcw,
@@ -16,10 +17,14 @@ import { GameCanvas } from './components/GameCanvas';
 import { LogbookPanel } from './components/LogbookPanel';
 import { ProbeMinimap } from './components/ProbeMinimap';
 import { RadarPanel } from './components/RadarPanel';
+import { StoryPopupModal } from './components/StoryPopupModal';
 import {
+  FUEL_NODE_COUNT,
   generatePlanetCrystals,
   INITIAL_RESCUE_OBJECTS,
+  pickFuelRespawnCoords,
   PLANETS,
+  STORY_POPUP_BY_OBJECT_ID,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from './data/planets';
@@ -35,7 +40,7 @@ import {
 } from './types/game';
 import { soundEngine } from './utils/audio';
 
-const STORAGE_KEY = 'horizonte_orbital_save_v4';
+const STORAGE_KEY = 'horizonte_orbital_save_v6';
 
 interface SavedState {
   planetId: PlanetId;
@@ -74,6 +79,27 @@ function loadSavedState(): SavedState | null {
     ) {
       return null;
     }
+
+    // Ensure saved fuel nodes match scarce count & keep orbital radii updated
+    if (parsed.crystalsByPlanet?.moon?.length !== FUEL_NODE_COUNT) {
+      parsed.crystalsByPlanet = {
+        moon: generatePlanetCrystals('moon'),
+        mars: generatePlanetCrystals('mars'),
+      };
+    }
+    (['moon', 'mars'] as PlanetId[]).forEach((pid) => {
+      parsed.objectsByPlanet[pid] = parsed.objectsByPlanet[pid].map((obj, idx) => {
+        const template = INITIAL_RESCUE_OBJECTS[pid][idx];
+        if (!template || obj.discovered) return obj;
+        return {
+          ...obj,
+          orbitRadiusX: template.orbitRadiusX,
+          orbitRadiusY: template.orbitRadiusY,
+          orbitSpeed: template.orbitSpeed,
+        };
+      });
+    });
+
     return parsed;
   } catch {
     return null;
@@ -107,6 +133,12 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<'radar' | 'logbook'>('radar');
   const [muted, setMuted] = useState<boolean>(false);
   const [toast, setToast] = useState<TelemetryToast | null>(null);
+  const [storyPopup, setStoryPopup] = useState<{
+    kicker: string;
+    title: string;
+    imageUrl: string;
+  } | null>(null);
+  const returnPhaseRef = useRef<GamePhase>('PLAYING');
   const [transitionState, setTransitionState] =
     useState<TransitionState | null>(null);
 
@@ -171,6 +203,28 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Replenish one sparse fuel canister far from player when active canisters drop below 4
+  useEffect(() => {
+    if (phase !== 'PLAYING') return;
+    const activeFuelCount = currentCrystals.filter((c) => !c.collected).length;
+    if (activeFuelCount >= 4) return;
+
+    const timer = window.setTimeout(() => {
+      setCrystalsByPlanet((prev) => {
+        const list = prev[planetId];
+        const idx = list.findIndex((c) => c.collected);
+        if (idx === -1) return prev;
+        const coords = pickFuelRespawnCoords(shipRef.current.x, shipRef.current.y);
+        const updated = list.map((c, i) =>
+          i === idx ? { ...c, x: coords.x, y: coords.y, collected: false } : c
+        );
+        return { ...prev, [planetId]: updated };
+      });
+    }, 6500);
+
+    return () => window.clearTimeout(timer);
+  }, [phase, planetId, currentCrystals]);
+
   // Trigger ALL_COMPLETED celebration once all 8 objects are rescued
   useEffect(() => {
     if (
@@ -186,13 +240,35 @@ export default function App() {
     }
   }, [totalRescued, allCompletedShown, phase]);
 
+  // Start looping background soundtrack upon first user interaction (respecting browser autoplay rules)
+  useEffect(() => {
+    const unlockMusic = () => {
+      soundEngine.ensureMusicPlaying();
+    };
+    window.addEventListener('pointerdown', unlockMusic, { passive: true });
+    window.addEventListener('keydown', unlockMusic, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockMusic);
+      window.removeEventListener('keydown', unlockMusic);
+    };
+  }, []);
+
+  // Gently duck music while paused or reading archival story pages
+  useEffect(() => {
+    soundEngine.setMusicDucked(phase === 'PAUSED' || phase === 'STORY_POPUP');
+  }, [phase]);
+
   const handleToggleMute = () => {
     const next = !muted;
     soundEngine.muted = next;
+    if (!next) {
+      soundEngine.ensureMusicPlaying();
+    }
     setMuted(next);
   };
 
   const handleStartMission = () => {
+    soundEngine.ensureMusicPlaying();
     const fresh = createFreshState(selectedStartPlanet);
     setPlanetId(selectedStartPlanet);
     setScore(0);
@@ -201,6 +277,7 @@ export default function App() {
     setLogEntries([]);
     setAllCompletedShown(false);
     setToast(null);
+    setStoryPopup(null);
     shipRef.current = {
       x: WORLD_WIDTH / 2,
       y: WORLD_HEIGHT / 2,
@@ -230,6 +307,7 @@ export default function App() {
     setLogEntries([]);
     setAllCompletedShown(false);
     setToast(null);
+    setStoryPopup(null);
     setTransitionState(null);
     setSidebarTab('radar');
     shipRef.current = {
@@ -249,6 +327,20 @@ export default function App() {
   };
 
   const handleRepairAndRespawn = () => {
+    // Also guarantee at least 5 active fuel canisters on respawn so player is never stranded
+    setCrystalsByPlanet((prev) => {
+      const list = prev[planetId];
+      let activeCount = list.filter((c) => !c.collected).length;
+      if (activeCount >= 5) return prev;
+      const updated = list.map((c) => {
+        if (!c.collected || activeCount >= 5) return c;
+        activeCount += 1;
+        const coords = pickFuelRespawnCoords(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+        return { ...c, x: coords.x, y: coords.y, collected: false };
+      });
+      return { ...prev, [planetId]: updated };
+    });
+
     shipRef.current = {
       x: WORLD_WIDTH / 2,
       y: WORLD_HEIGHT / 2,
@@ -267,6 +359,79 @@ export default function App() {
     setPhase('PLAYING');
   };
 
+  const handleTogglePause = useCallback(() => {
+    setPhase((current) => {
+      if (current === 'PLAYING') {
+        shipRef.current.thrusting = false;
+        shipRef.current.boosting = false;
+        return 'PAUSED';
+      }
+      if (current === 'PAUSED') {
+        shipRef.current.vx = 0;
+        shipRef.current.vy = 0;
+        shipRef.current.thrusting = false;
+        shipRef.current.boosting = false;
+        shipRef.current.invulnTimer = Math.max(shipRef.current.invulnTimer, 0.8);
+        setSidebarTab((tab) => (tab === 'logbook' ? 'radar' : tab));
+        return 'PLAYING';
+      }
+      return current;
+    });
+  }, []);
+
+  const handleSelectSidebarTab = useCallback(
+    (tab: 'radar' | 'logbook') => {
+      setSidebarTab(tab);
+      if (tab === 'logbook' && phase === 'PLAYING') {
+        shipRef.current.thrusting = false;
+        shipRef.current.boosting = false;
+        setPhase('PAUSED');
+      }
+    },
+    [phase]
+  );
+
+  // Allow keyboard P / Escape to pause or resume during active mission
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (phase === 'PLAYING' || phase === 'PAUSED') {
+          e.preventDefault();
+          handleTogglePause();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [phase, handleTogglePause]);
+
+  const handleContinueFromStory = () => {
+    shipRef.current.vx = 0;
+    shipRef.current.vy = 0;
+    shipRef.current.thrusting = false;
+    shipRef.current.boosting = false;
+    shipRef.current.invulnTimer = 1.6;
+    setStoryPopup(null);
+    setPhase(returnPhaseRef.current);
+  };
+
+  const handleOpenStoryFromLogbook = useCallback(
+    (objectId: string) => {
+      const story = STORY_POPUP_BY_OBJECT_ID[objectId];
+      if (!story) return;
+      if (phase !== 'STORY_POPUP') {
+        returnPhaseRef.current = phase;
+      }
+      shipRef.current.vx = 0;
+      shipRef.current.vy = 0;
+      shipRef.current.thrusting = false;
+      shipRef.current.boosting = false;
+      setStoryPopup(story);
+      setPhase('STORY_POPUP');
+    },
+    [phase]
+  );
+
   const handleCrystalCollect = useCallback(
     (crystalId: string, value: number) => {
       setScore((prev) => prev + value);
@@ -281,18 +446,31 @@ export default function App() {
   );
 
   const handleObjectRescued = useCallback(
-    (objectId: string) => {
+    (
+      objectId: string,
+      nextObjectPlacement?: { id: string; orbitAngle: number; x: number; y: number }
+    ) => {
       const targetObj = objectsByPlanet[planetId].find((o) => o.id === objectId);
       if (!targetObj || targetObj.discovered) return;
 
       setScore((prev) => prev + targetObj.points);
       setObjectsByPlanet((prev) => ({
         ...prev,
-        [planetId]: prev[planetId].map((o) =>
-          o.id === objectId
-            ? { ...o, discovered: true, downloadProgress: 1 }
-            : o
-        ),
+        [planetId]: prev[planetId].map((o) => {
+          if (o.id === objectId) {
+            return { ...o, discovered: true, downloadProgress: 1 };
+          }
+          if (nextObjectPlacement && o.id === nextObjectPlacement.id) {
+            return {
+              ...o,
+              orbitAngle: nextObjectPlacement.orbitAngle,
+              x: nextObjectPlacement.x,
+              y: nextObjectPlacement.y,
+              downloadProgress: 0,
+            };
+          }
+          return o;
+        }),
       }));
 
       const now = new Date();
@@ -332,6 +510,17 @@ export default function App() {
         points: targetObj.points,
         planet: planetId,
       });
+
+      const story = STORY_POPUP_BY_OBJECT_ID[targetObj.id];
+      if (story) {
+        returnPhaseRef.current = 'PLAYING';
+        shipRef.current.vx = 0;
+        shipRef.current.vy = 0;
+        shipRef.current.thrusting = false;
+        shipRef.current.boosting = false;
+        setStoryPopup(story);
+        setPhase('STORY_POPUP');
+      }
     },
     [objectsByPlanet, planetId]
   );
@@ -341,6 +530,10 @@ export default function App() {
     if (remainingHull <= 0) {
       setPhase('SHIP_DESTROYED');
     }
+  }, []);
+
+  const handleOutOfFuel = useCallback(() => {
+    setPhase((current) => (current === 'PLAYING' ? 'OUT_OF_FUEL' : current));
   }, []);
 
   const handleShipTelemetryUpdate = useCallback(
@@ -433,20 +626,29 @@ export default function App() {
         </div>
 
         {/* Zone 3: Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <a
-            href="/horizonte-orbital.html"
-            download="horizonte-orbital.html"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:text-cyan-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Descargar HTML</span>
-          </a>
+        <div className="flex items-center gap-2.5 shrink-0">
+          {(phase === 'PLAYING' || phase === 'PAUSED') && (
+            <button
+              type="button"
+              onClick={handleTogglePause}
+              className={`crayon-btn inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                phase === 'PAUSED' ? 'crayon-btn-emerald' : 'crayon-btn-cyan'
+              }`}
+              aria-label={phase === 'PAUSED' ? 'Reanudar misión' : 'Pausar misión'}
+            >
+              {phase === 'PAUSED' ? (
+                <Play className="w-3.5 h-3.5" />
+              ) : (
+                <Pause className="w-3.5 h-3.5" />
+              )}
+              <span>{phase === 'PAUSED' ? 'Reanudar' : 'Pausa'}</span>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={handleToggleMute}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="crayon-btn crayon-btn-dark inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
             aria-label={muted ? 'Activar audio' : 'Silenciar audio'}
           >
             {muted ? (
@@ -462,7 +664,7 @@ export default function App() {
           <button
             type="button"
             onClick={handleResetMission}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="crayon-btn crayon-btn-amber inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reiniciar</span>
@@ -484,12 +686,13 @@ export default function App() {
             onCrystalCollect={handleCrystalCollect}
             onObjectRescued={handleObjectRescued}
             onShipDamaged={handleShipDamaged}
+            onOutOfFuel={handleOutOfFuel}
             onShipTelemetryUpdate={handleShipTelemetryUpdate}
             onTransitionProgress={handleTransitionProgress}
             onTransitionComplete={handleTransitionComplete}
           />
 
-          {/* Top-Left Sector, Hull & Thruster Boost Telemetry */}
+          {/* Top-Left Sector, Hull & Gasoline Telemetry */}
           {phase === 'PLAYING' && (
             <div className="pointer-events-none absolute top-3 left-3 flex flex-col gap-2">
               <div className="bg-[#0B0F17]/90 border border-slate-800/90 rounded-lg px-3 py-2 backdrop-blur-xs">
@@ -531,20 +734,54 @@ export default function App() {
                   </span>
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <Fuel
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      boostEnergy > 50
+                        ? 'text-emerald-400'
+                        : boostEnergy > 25
+                        ? 'text-amber-400'
+                        : 'text-red-400'
+                    }`}
+                  />
                   <div className="w-28 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full transition-all duration-100 ${
-                        planetId === 'moon' ? 'bg-cyan-400' : 'bg-amber-400'
+                        boostEnergy > 50
+                          ? 'bg-emerald-400'
+                          : boostEnergy > 25
+                          ? 'bg-amber-400'
+                          : 'bg-red-500'
                       }`}
                       style={{ width: `${Math.round(boostEnergy)}%` }}
                     />
                   </div>
-                  <span className="font-mono-tabular text-[11px] text-slate-300">
+                  <span
+                    className={`font-mono-tabular text-[11px] ${
+                      boostEnergy <= 25
+                        ? 'text-red-400 font-semibold'
+                        : 'text-slate-300'
+                    }`}
+                  >
                     {Math.round(boostEnergy)}%
                   </span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Low Gasoline Warning Banner */}
+          {phase === 'PLAYING' && boostEnergy <= 25 && (
+            <div
+              role="status"
+              className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-[#1A0B0E]/95 border border-red-500/80 text-red-200 px-3.5 py-2 rounded-lg shadow-xl whitespace-nowrap"
+            >
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+              <Fuel className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="font-mono-tabular text-xs font-semibold tracking-wide">
+                {boostEnergy <= 0
+                  ? '¡Sin gasolina! Motores apagados'
+                  : `¡Gasolina baja (${Math.round(boostEnergy)}%)! Recoge los tanques verdes`}
+              </span>
             </div>
           )}
 
@@ -569,10 +806,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  setSidebarTab('logbook');
+                  handleSelectSidebarTab('logbook');
                   setToast(null);
                 }}
-                className="mt-2 text-xs font-medium text-cyan-400 hover:text-cyan-300 underline underline-offset-2 cursor-pointer"
+                className="crayon-btn crayon-btn-cyan mt-2.5 inline-flex items-center px-3.5 py-1 text-sm font-bold whitespace-nowrap cursor-pointer"
               >
                 Ver registro en Bitácora
               </button>
@@ -582,7 +819,7 @@ export default function App() {
           {/* Bottom-Left Controls Hint */}
           {phase === 'PLAYING' && !currentMissionComplete && (
             <div className="pointer-events-none hidden sm:block absolute bottom-3 left-3 bg-[#0B0F17]/85 border border-slate-800/80 rounded-md px-3 py-1.5 text-[11px] text-slate-300">
-              WASD o Flechas para volar · Mantén clic para dirigir · Espacio para turbo
+              WASD o Flechas para volar · Espacio para turbo · Recoge tanques verdes de gasolina
             </div>
           )}
 
@@ -598,7 +835,7 @@ export default function App() {
 
           {/* Mission Complete -> Planetary Propulsion Launch CTA (kept clear of bottom-right minimap) */}
           {phase === 'PLAYING' && currentMissionComplete && (
-            <div className="absolute bottom-3 left-3 w-[calc(100%-224px)] max-w-md bg-[#0E131D]/95 border border-slate-700 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl">
+            <div className="crayon-box crayon-box-slate absolute bottom-3 left-3 w-[calc(100%-224px)] max-w-md p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl">
               <div className="min-w-0 text-center sm:text-left">
                 <div className="text-xs font-semibold text-emerald-400">
                   Misión en {activePlanet.name} completada (4/4 objetos)
@@ -611,10 +848,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleLaunchToTargetPlanet}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`crayon-btn inline-flex items-center gap-2 px-4 py-2 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
                   activePlanet.targetPlanetId === 'mars'
-                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950'
+                    ? 'crayon-btn-amber'
+                    : 'crayon-btn-cyan'
                 }`}
               >
                 <Rocket className="w-4 h-4" />
@@ -663,7 +900,7 @@ export default function App() {
                     Horizonte Orbital
                   </h1>
                   <p className="text-sm text-slate-300 leading-relaxed mt-2">
-                    Pilota tu nave espacial sobre la superficie planetaria, recolecta cristales de energía y utiliza el radar táctico para localizar 4 objetos científicos que transmitirán su información hacia tu bitácora.
+                    Pilota tu nave espacial sobre la superficie planetaria, vigila tu nivel de gasolina recogiendo tanques verdes en el mapa y localiza los 4 objetos científicos en orden para transmitir su información hacia tu bitácora.
                   </p>
                 </div>
 
@@ -676,16 +913,22 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setSelectedStartPlanet('moon')}
-                      className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                      className={`crayon-btn p-3.5 text-left cursor-pointer ${
                         selectedStartPlanet === 'moon'
-                          ? 'bg-cyan-950/40 border-cyan-500 text-slate-100'
-                          : 'bg-[#0B0F17] border-slate-800 text-slate-400 hover:border-slate-700'
+                          ? 'crayon-btn-cyan'
+                          : 'crayon-btn-dark'
                       }`}
                     >
-                      <div className="font-display text-sm font-semibold text-slate-100">
+                      <div className="font-crayon text-lg font-bold">
                         La Luna
                       </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
+                      <div
+                        className={`font-sans text-xs mt-0.5 ${
+                          selectedStartPlanet === 'moon'
+                            ? 'text-slate-900 font-medium'
+                            : 'text-slate-300'
+                        }`}
+                      >
                         Mare Tranquillitatis · 4 objetos
                       </div>
                     </button>
@@ -693,16 +936,22 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setSelectedStartPlanet('mars')}
-                      className={`p-3.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                      className={`crayon-btn p-3.5 text-left cursor-pointer ${
                         selectedStartPlanet === 'mars'
-                          ? 'bg-amber-950/40 border-amber-500 text-slate-100'
-                          : 'bg-[#0B0F17] border-slate-800 text-slate-400 hover:border-slate-700'
+                          ? 'crayon-btn-amber'
+                          : 'crayon-btn-dark'
                       }`}
                     >
-                      <div className="font-display text-sm font-semibold text-slate-100">
+                      <div className="font-crayon text-lg font-bold">
                         Marte
                       </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
+                      <div
+                        className={`font-sans text-xs mt-0.5 ${
+                          selectedStartPlanet === 'mars'
+                            ? 'text-slate-900 font-medium'
+                            : 'text-slate-300'
+                        }`}
+                      >
                         Cráter Jezero · 4 objetos
                       </div>
                     </button>
@@ -720,10 +969,63 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleStartMission}
-                  className="w-full py-3 px-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm rounded-lg transition-colors cursor-pointer"
+                  className="crayon-btn crayon-btn-cyan w-full py-3 px-4 font-bold text-base cursor-pointer"
                 >
                   Comenzar Misión
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Story / Archival Discovery Popup (pure transparent image + Salir button) */}
+          {phase === 'STORY_POPUP' && storyPopup && (
+            <StoryPopupModal
+              imageUrl={storyPopup.imageUrl}
+              alt={storyPopup.title}
+              onExit={handleContinueFromStory}
+            />
+          )}
+
+          {/* Crayon Pause Overlay (manual pause or auto-pause when reading Bitácora) */}
+          {phase === 'PAUSED' && (
+            <div className="absolute inset-0 bg-[#07090E]/75 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="crayon-box crayon-box-slate w-full max-w-md p-6 flex flex-col gap-4 shadow-2xl">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-sky-300">
+                    <Pause className="w-4 h-4 shrink-0" />
+                    <span>
+                      {sidebarTab === 'logbook'
+                        ? 'Bitácora Abierta · Juego en Pausa'
+                        : 'Nave Detenida · Pausa Activa'}
+                    </span>
+                  </div>
+                  <h2 className="font-crayon text-3xl font-bold text-slate-50 mt-1">
+                    Misión en Pausa
+                  </h2>
+                  <p className="text-sm text-slate-300 leading-relaxed mt-1.5">
+                    {sidebarTab === 'logbook'
+                      ? 'El vuelo, los meteoritos y el consumo de gasolina se pausaron automáticamente mientras revisas la bitácora.'
+                      : 'Los motores, los asteroides y el consumo de gasolina están detenidos hasta que reanudes la misión.'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleTogglePause}
+                    className="crayon-btn crayon-btn-emerald flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold cursor-pointer"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Reanudar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetMission}
+                    className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
+                  >
+                    Reiniciar Misión
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -749,14 +1051,51 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleRepairAndRespawn}
-                    className="flex-1 py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="crayon-btn crayon-btn-cyan flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
                     Reparar y Relanzar
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
-                    className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
+                  >
+                    Reiniciar Misión
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Out of Fuel Emergency Modal */}
+          {phase === 'OUT_OF_FUEL' && (
+            <div className="absolute inset-0 bg-[#07090E]/85 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0E131D] border border-amber-500/45 rounded-xl p-6 flex flex-col gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
+                    <Fuel className="w-4 h-4 shrink-0" />
+                    <span>Tanque Vacío · Propulsión Detenida</span>
+                  </div>
+                  <h2 className="font-display text-2xl font-bold text-slate-50 mt-1">
+                    Sin Gasolina
+                  </h2>
+                  <p className="text-sm text-slate-300 leading-relaxed mt-2">
+                    El movimiento de la nave consumió toda la gasolina disponible. Recoge los tanques verdes dispersos antes de que el medidor llegue a cero. Tus objetos rescatados siguen en la bitácora.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRepairAndRespawn}
+                    className="crayon-btn crayon-btn-emerald flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
+                  >
+                    Reabastecer y Relanzar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetMission}
+                    className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
                     Reiniciar Misión
                   </button>
@@ -800,14 +1139,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setPhase('PLAYING')}
-                    className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="crayon-btn crayon-btn-dark flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
                     Seguir Explorando
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
-                    className="flex-1 py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="crayon-btn crayon-btn-cyan flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
                     Nueva Misión
                   </button>
@@ -821,14 +1160,16 @@ export default function App() {
         <aside className="w-full lg:w-[390px] xl:w-[410px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-800/90 bg-[#0E131D] flex flex-col max-h-[44vh] lg:max-h-none min-h-0">
           {/* Console Segmented Tabs */}
           <div className="p-3 border-b border-slate-800/80 shrink-0">
-            <div className="flex items-center gap-1 p-1 bg-[#080C14] border border-slate-800/80 rounded-lg">
+            <div className="crayon-box crayon-box-slate flex items-center gap-2 p-1.5">
               <button
                 type="button"
-                onClick={() => setSidebarTab('radar')}
-                className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                onClick={() => handleSelectSidebarTab('radar')}
+                className={`crayon-btn flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
                   sidebarTab === 'radar'
-                    ? 'bg-slate-800 text-slate-100'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? planetId === 'moon'
+                      ? 'crayon-btn-cyan'
+                      : 'crayon-btn-amber'
+                    : 'crayon-btn-ghost'
                 }`}
               >
                 <Radio className="w-3.5 h-3.5" />
@@ -836,11 +1177,11 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setSidebarTab('logbook')}
-                className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                onClick={() => handleSelectSidebarTab('logbook')}
+                className={`crayon-btn flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
                   sidebarTab === 'logbook'
-                    ? 'bg-slate-800 text-slate-100'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'crayon-btn-emerald'
+                    : 'crayon-btn-ghost'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -862,15 +1203,15 @@ export default function App() {
                 />
 
                 {/* Interplanetary Launch Module inside console */}
-                <div className="border border-slate-800/90 rounded-lg bg-[#0B0F18] p-3.5 flex flex-col gap-2.5 mt-auto">
+                <div className="crayon-box crayon-box-slate p-3.5 flex flex-col gap-2.5 mt-auto">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-200">
+                    <span className="font-crayon text-base font-bold text-slate-100">
                       Propulsión Interplanetaria
                     </span>
                     <span
-                      className={`font-mono-tabular text-[11px] ${
+                      className={`font-crayon text-xs font-bold ${
                         currentMissionComplete
-                          ? 'text-emerald-400'
+                          ? 'text-emerald-300'
                           : 'text-slate-400'
                       }`}
                     >
@@ -878,7 +1219,7 @@ export default function App() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-300 leading-relaxed">
                     {currentMissionComplete
                       ? `Todos los objetos de ${activePlanet.name} fueron rescatados. Puedes despegar hacia ${activePlanet.targetPlanetName}.`
                       : `Rescata los 4 objetos de ${activePlanet.name} para habilitar el despegue hacia ${activePlanet.targetPlanetName}.`}
@@ -888,12 +1229,12 @@ export default function App() {
                     type="button"
                     disabled={!currentMissionComplete || phase !== 'PLAYING'}
                     onClick={handleLaunchToTargetPlanet}
-                    className={`w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                    className={`crayon-btn w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold whitespace-nowrap ${
                       currentMissionComplete && phase === 'PLAYING'
                         ? activePlanet.targetPlanetId === 'mars'
-                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer'
-                          : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 cursor-pointer'
-                        : 'bg-slate-800/70 text-slate-500 cursor-not-allowed'
+                          ? 'crayon-btn-amber cursor-pointer'
+                          : 'crayon-btn-cyan cursor-pointer'
+                        : 'crayon-btn-disabled cursor-not-allowed'
                     }`}
                   >
                     <Rocket className="w-4 h-4" />
@@ -902,7 +1243,12 @@ export default function App() {
                 </div>
               </>
             ) : (
-              <LogbookPanel entries={logEntries} />
+              <LogbookPanel
+                activePlanetId={planetId}
+                objectsByPlanet={objectsByPlanet}
+                entries={logEntries}
+                onOpenStoryImage={handleOpenStoryFromLogbook}
+              />
             )}
           </div>
         </aside>

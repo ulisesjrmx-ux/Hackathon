@@ -18,11 +18,32 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Patrick+Hand&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
   <body class="bg-[#07090E] text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-100">
+    <!-- Hidden SVG filter for authentic wax-crayon ragged edges on UI borders/fills (never blurs button text) -->
+    <svg width="0" height="0" style="position:absolute;pointer-events:none;opacity:0" aria-hidden="true">
+      <defs>
+        <filter id="crayon-edge" x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.065"
+            numOctaves="3"
+            seed="7"
+            result="noise"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="noise"
+            scale="3.2"
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,9 +1,54 @@
+const BACKGROUND_MUSIC_URL =
+  '/assets/aistudio/lexin_music-interstellar-space-117482_773387a5.mp3';
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
-  public muted = false;
+  private bgm: HTMLAudioElement | null = null;
+  private _muted = false;
+  private baseBgmVolume = 0.34;
+
+  public get muted(): boolean {
+    return this._muted;
+  }
+
+  public set muted(value: boolean) {
+    this._muted = value;
+    if (this.bgm) {
+      this.bgm.muted = value;
+      if (!value && this.bgm.paused) {
+        this.bgm.play().catch(() => {});
+      }
+    }
+  }
+
+  private ensureBgm(): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.bgm) {
+      const audio = new Audio(BACKGROUND_MUSIC_URL);
+      audio.loop = true;
+      audio.preload = 'auto';
+      audio.volume = this.baseBgmVolume;
+      audio.muted = this._muted;
+      this.bgm = audio;
+    }
+    return this.bgm;
+  }
+
+  public ensureMusicPlaying() {
+    const audio = this.ensureBgm();
+    if (!audio || this._muted) return;
+    if (audio.paused) {
+      audio.play().catch(() => {});
+    }
+  }
+
+  public setMusicDucked(ducked: boolean) {
+    if (!this.bgm) return;
+    this.bgm.volume = ducked ? 0.22 : this.baseBgmVolume;
+  }
 
   private ensureContext(): AudioContext | null {
-    if (this.muted) return null;
+    if (this._muted) return null;
     if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx =
         window.AudioContext ||
@@ -169,6 +214,27 @@ class SoundEngine {
       gain.connect(ctx.destination);
       osc.start(t);
       osc.stop(t + 0.095);
+    });
+  }
+
+  public playLowFuelAlert() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    [0, 0.18].forEach((offset) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + offset;
+      osc.frequency.setValueAtTime(520, t);
+      osc.frequency.exponentialRampToValueAtTime(340, t + 0.11);
+      gain.gain.setValueAtTime(0.055, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.14);
     });
   }
 
