@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Language } from '../types/game';
+import { UI_TEXT } from '../utils/i18n';
 
 interface StoryPopupModalProps {
   imageUrl: string;
   alt: string;
+  lang: Language;
   onExit: () => void;
 }
 
@@ -179,9 +182,11 @@ function removeWhiteBackgroundToDataUrl(src: string): Promise<string> {
 export const StoryPopupModal: React.FC<StoryPopupModalProps> = ({
   imageUrl,
   alt,
+  lang,
   onExit,
 }) => {
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
+  const t = UI_TEXT[lang];
 
   useEffect(() => {
     let active = true;
@@ -210,7 +215,7 @@ export const StoryPopupModal: React.FC<StoryPopupModalProps> = ({
         onClick={onExit}
         className="crayon-btn crayon-btn-amber inline-flex items-center justify-center px-8 py-2.5 text-base font-bold whitespace-nowrap shrink-0 cursor-pointer"
       >
-        Salir
+        {t.exitStory}
       </button>
     </div>
   );

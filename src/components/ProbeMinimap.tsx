@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { CrystalNode, PlanetConfig, RescueObject, ShipState } from '../types/game';
+import { CrystalNode, Language, PlanetConfig, RescueObject, ShipState } from '../types/game';
 import {
   drawCrayonCircle,
   drawCrayonDiamond,
@@ -11,9 +11,11 @@ import {
   drawCrayonShip,
   drawCrayonSweep,
 } from '../utils/crayonCanvas';
+import { UI_TEXT } from '../utils/i18n';
 
 interface ProbeMinimapProps {
   planet: PlanetConfig;
+  lang: Language;
   shipRef: React.MutableRefObject<ShipState>;
   objects: RescueObject[];
   crystals: CrystalNode[];
@@ -21,6 +23,7 @@ interface ProbeMinimapProps {
 
 export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
   planet,
+  lang,
   shipRef,
   objects,
   crystals,
@@ -28,10 +31,12 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const infoRef = useRef<HTMLDivElement | null>(null);
   const planetRef = useRef(planet);
+  const langRef = useRef(lang);
   const objectsRef = useRef(objects);
   const crystalsRef = useRef(crystals);
 
   planetRef.current = planet;
+  langRef.current = lang;
   objectsRef.current = objects;
   crystalsRef.current = crystals;
 
@@ -223,11 +228,12 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
       drawCrayonShip(ctx, shipMx, shipMy, ship.angle, 0.85, '#FEF08A', '#090D16');
 
       if (infoRef.current) {
+        const text = UI_TEXT[langRef.current];
         if (activeObj) {
-          infoRef.current.textContent = `Objetivo actual: ${Math.round(activeDist)} m`;
+          infoRef.current.textContent = text.minimapTarget(Math.round(activeDist));
           infoRef.current.style.color = isMoon ? '#7DD3FC' : '#FDE047';
         } else {
-          infoRef.current.textContent = '4/4 sondas escaneadas';
+          infoRef.current.textContent = text.minimapAllScanned(objs.length);
           infoRef.current.style.color = '#6EE7B7';
         }
       }
@@ -241,6 +247,7 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
 
   const rescued = objects.filter((o) => o.discovered).length;
   const boxTone = planet.id === 'moon' ? 'crayon-box-moon' : 'crayon-box-mars';
+  const t = UI_TEXT[lang];
 
   return (
     <div
@@ -248,10 +255,10 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
     >
       <div className="flex items-center justify-between gap-3 mb-1 px-0.5">
         <span className="font-crayon text-sm font-bold tracking-wide text-slate-100">
-          Radar de Sondas
+          {t.minimapTitle}
         </span>
         <span className="font-mono-tabular text-[11px] text-slate-300">
-          {rescued}/4
+          {rescued}/{objects.length}
         </span>
       </div>
 
@@ -260,14 +267,14 @@ export const ProbeMinimap: React.FC<ProbeMinimapProps> = ({
         width={184}
         height={156}
         className="block rounded-lg"
-        aria-label="Minimapa radar estilo crayola"
+        aria-label={t.minimapTitle}
       />
 
       <div
         ref={infoRef}
         className="font-crayon text-xs text-slate-300 mt-1 px-0.5 truncate max-w-[184px]"
       >
-        Escaneando sector...
+        {t.minimapScanning}
       </div>
     </div>
   );

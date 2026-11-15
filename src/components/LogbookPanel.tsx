@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpen, CheckCircle2, Image as ImageIcon, Lock } from 'lucide-react';
 import { STORY_POPUP_BY_OBJECT_ID } from '../data/planets';
-import { LogEntry, PlanetId, RescueObject } from '../types/game';
+import { Language, LogEntry, PlanetId, RescueObject } from '../types/game';
+import { getLocalizedObjectCopy, getPlanetDisplayName, UI_TEXT } from '../utils/i18n';
 
 interface LogbookPanelProps {
   activePlanetId: PlanetId;
+  lang: Language;
   objectsByPlanet: Record<PlanetId, RescueObject[]>;
   entries: LogEntry[];
   onOpenStoryImage: (objectId: string) => void;
@@ -12,8 +14,8 @@ interface LogbookPanelProps {
 
 export const LogbookPanel: React.FC<LogbookPanelProps> = ({
   activePlanetId,
+  lang,
   objectsByPlanet,
-  entries,
   onOpenStoryImage,
 }) => {
   const [selectedPlanet, setSelectedPlanet] = useState<PlanetId>(activePlanetId);
@@ -24,9 +26,13 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
   }, [activePlanetId]);
 
   const planetObjects = objectsByPlanet[selectedPlanet];
+  const moonTotal = objectsByPlanet.moon.length;
+  const marsTotal = objectsByPlanet.mars.length;
   const moonUnlocked = objectsByPlanet.moon.filter((o) => o.discovered).length;
   const marsUnlocked = objectsByPlanet.mars.filter((o) => o.discovered).length;
   const totalUnlocked = moonUnlocked + marsUnlocked;
+  const totalObjects = moonTotal + marsTotal;
+  const t = UI_TEXT[lang];
 
   const handleSelectItem = (obj: RescueObject) => {
     if (!obj.discovered) return;
@@ -42,16 +48,16 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
       <div className="flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-slate-300" />
-          <h2 className="font-display text-sm font-semibold tracking-wide text-slate-100">
-            Bitácora de Misión
+          <h2 className="font-crayon text-lg font-bold tracking-wide text-slate-100">
+            {t.logbookTitle}
           </h2>
         </div>
         <span className="font-mono-tabular text-xs text-slate-400">
-          {totalUnlocked}/8 desbloqueados
+          {t.unlockedCount(totalUnlocked, totalObjects)}
         </span>
       </div>
 
-      {/* Planet selector for the 4-item logbook menu */}
+      {/* Planet selector for the logbook menu */}
       <div className="crayon-box crayon-box-slate flex items-center gap-2 p-1.5 shrink-0">
         <button
           type="button"
@@ -63,7 +69,7 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
             selectedPlanet === 'moon' ? 'crayon-btn-cyan' : 'crayon-btn-ghost'
           }`}
         >
-          La Luna ({moonUnlocked}/4)
+          {getPlanetDisplayName('moon', lang)} ({moonUnlocked}/{moonTotal})
         </button>
         <button
           type="button"
@@ -75,7 +81,7 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
             selectedPlanet === 'mars' ? 'crayon-btn-amber' : 'crayon-btn-ghost'
           }`}
         >
-          Marte ({marsUnlocked}/4)
+          {getPlanetDisplayName('mars', lang)} ({marsUnlocked}/{marsTotal})
         </button>
       </div>
 
@@ -84,8 +90,8 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
         {planetObjects.map((obj, index) => {
           const unlocked = obj.discovered;
           const hasImage = Boolean(STORY_POPUP_BY_OBJECT_ID[obj.id]);
-          const logEntry = entries.find((e) => e.objectId === obj.id);
           const isExpanded = expandedObjectId === obj.id;
+          const localized = getLocalizedObjectCopy(obj, lang);
 
           return (
             <div
@@ -111,22 +117,22 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono-tabular text-[11px] text-slate-400 shrink-0">
-                      0{index + 1}.
+                      {String(index + 1).padStart(2, '0')}.
                     </span>
                     <span
                       className={`font-crayon text-base font-bold truncate ${
                         unlocked ? 'text-slate-100' : 'text-slate-400'
                       }`}
                     >
-                      {obj.name}
+                      {localized.name}
                     </span>
                   </div>
                   <div className="font-sans text-[11px] text-slate-300/85 mt-1">
                     {unlocked
                       ? hasImage
-                        ? 'Desbloqueado · Toca para abrir imagen'
-                        : 'Desbloqueado · Toca para ver registro'
-                      : 'Bloqueado · Recógelo para desbloquear'}
+                        ? t.tapToOpenImage
+                        : t.tapToViewLog
+                      : t.lockedCollect}
                   </div>
                 </div>
 
@@ -135,12 +141,12 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
                     hasImage ? (
                       <span className="inline-flex items-center gap-1 text-xs font-bold text-sky-300">
                         <ImageIcon className="w-3.5 h-3.5" />
-                        <span>Ver imagen</span>
+                        <span>{t.viewImage}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Abierto</span>
+                        <span>{t.open}</span>
                       </span>
                     )
                   ) : (
@@ -152,16 +158,16 @@ export const LogbookPanel: React.FC<LogbookPanelProps> = ({
               {unlocked && !hasImage && isExpanded && (
                 <div className="px-3.5 pb-3.5 pt-2 border-t border-slate-800/80 flex flex-col gap-1.5">
                   <div className="text-xs font-medium text-slate-200">
-                    {logEntry?.transmissionTitle ?? obj.transmissionTitle}
+                    {localized.transmissionTitle}
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    {logEntry?.transmissionSummary ?? obj.transmissionSummary}
+                    {localized.transmissionSummary}
                   </p>
                   <div className="text-[11px] font-mono-tabular text-slate-300 pt-1">
-                    {logEntry?.telemetryReading ?? obj.telemetryReading}
+                    {localized.telemetryReading}
                   </div>
                   <div className="text-[11px] text-amber-300/90 pt-0.5">
-                    Imagen de bitácora pendiente por agregar.
+                    {t.pendingImage}
                   </div>
                 </div>
               )}

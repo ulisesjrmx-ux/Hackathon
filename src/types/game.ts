@@ -1,5 +1,7 @@
 export type PlanetId = 'moon' | 'mars';
 
+export type Language = 'es' | 'en';
+
 export type GamePhase =
   | 'MENU'
   | 'PLAYING'
@@ -120,6 +122,7 @@ export interface LogEntry {
 
 export interface TelemetryToast {
   id: string;
+  objectId?: string;
   title: string;
   subtitle: string;
   reading: string;

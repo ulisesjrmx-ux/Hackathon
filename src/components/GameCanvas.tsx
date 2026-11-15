@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   CrystalNode,
   GamePhase,
+  Language,
   PlanetConfig,
   PlanetId,
   RescueObject,
@@ -15,10 +16,12 @@ import {
   SHIP_THRUST_IMAGE_URL,
 } from '../data/planets';
 import { soundEngine } from '../utils/audio';
+import { getLocalizedObjectCopy, getPlanetDisplayName, getPlanetSectorName, UI_TEXT } from '../utils/i18n';
 
 interface GameCanvasProps {
   planet: PlanetConfig;
   phase: GamePhase;
+  lang: Language;
   shipRef: React.MutableRefObject<ShipState>;
   objects: RescueObject[];
   crystals: CrystalNode[];
@@ -92,6 +95,7 @@ const CRYSTAL_COLLECT_RANGE = 32;
 export const GameCanvas: React.FC<GameCanvasProps> = ({
   planet,
   phase,
+  lang,
   shipRef,
   objects,
   crystals,
@@ -110,6 +114,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Latest props in refs for 60fps loop without recreating loop
   const planetRef = useRef(planet);
   const phaseRef = useRef(phase);
+  const langRef = useRef(lang);
   const objectsRef = useRef(objects);
   const crystalsRef = useRef(crystals);
   const transitionRef = useRef(transitionState);
@@ -126,6 +131,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   planetRef.current = planet;
   phaseRef.current = phase;
+  langRef.current = lang;
   objectsRef.current = objects;
   crystalsRef.current = crystals;
   transitionRef.current = transitionState;
@@ -950,18 +956,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
 
       // Crisp world label beneath object
+      const currentLang = langRef.current;
+      const t = UI_TEXT[currentLang];
+      const localizedObj = getLocalizedObjectCopy(obj, currentLang);
       ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = obj.discovered ? '#6EE7B7' : '#F1F5F9';
-      ctx.fillText(obj.name, 0, 40);
+      ctx.fillText(localizedObj.name, 0, 40);
 
       ctx.font = '500 10px "JetBrains Mono", monospace';
       ctx.fillStyle = obj.discovered ? '#10B981' : '#94A3B8';
       ctx.fillText(
         obj.discovered
-          ? 'DATOS EN BITÁCORA'
+          ? t.canvasSaved
           : obj.downloadProgress > 0
-          ? `TRANSMITIENDO ${Math.round(obj.downloadProgress * 100)}%`
+          ? t.canvasTransmitting(Math.round(obj.downloadProgress * 100))
           : obj.frequency,
         0,
         54
@@ -1482,15 +1491,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const totalDuration = 3.8; // seconds
       const p = Math.min(1, elapsed / totalDuration);
 
-      let stageLabel = 'Ignición de Propulsores';
+      const currentLang = langRef.current;
+      const t = UI_TEXT[currentLang];
+      const fromName = getPlanetDisplayName(fromPlanet.id, currentLang);
+      const toName = getPlanetDisplayName(toPlanet.id, currentLang);
+      const toSector = getPlanetSectorName(toPlanet.id, currentLang);
+
+      let stageLabel: string = t.stageIgnition;
       if (p < 0.25) {
-        stageLabel = `Despegando de ${fromPlanet.name}`;
+        stageLabel = t.stageTakeoff(fromName);
       } else if (p < 0.68) {
-        stageLabel = `Tránsito propulsado hacia ${toPlanet.name}`;
+        stageLabel = t.stageTransit(toName);
       } else if (p < 0.92) {
-        stageLabel = `Descenso orbital en ${toPlanet.name}`;
+        stageLabel = t.stageDescent(toName);
       } else {
-        stageLabel = `Aterrizaje en ${toPlanet.sectorName}`;
+        stageLabel = t.stageLanding(toSector);
       }
 
       callbacksRef.current.onTransitionProgress(p, stageLabel);

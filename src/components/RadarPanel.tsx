@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { CheckCircle2, Compass, Radio } from 'lucide-react';
-import { CrystalNode, PlanetConfig, RescueObject, ShipState } from '../types/game';
+import { CrystalNode, Language, PlanetConfig, RescueObject, ShipState } from '../types/game';
 import {
   drawCrayonCircle,
   drawCrayonDiamond,
@@ -10,30 +10,34 @@ import {
   drawCrayonShip,
   drawCrayonSweep,
 } from '../utils/crayonCanvas';
+import { getLocalizedObjectCopy, getPlanetDisplayName, UI_TEXT } from '../utils/i18n';
 
 interface RadarPanelProps {
   planet: PlanetConfig;
+  lang: Language;
   shipRef: React.MutableRefObject<ShipState>;
   objects: RescueObject[];
   crystals: CrystalNode[];
   shipCoords: { x: number; y: number };
 }
 
-function getCardinalBearing(dx: number, dy: number): string {
+function getCardinalBearing(dx: number, dy: number, lang: Language): string {
+  const cardinals = UI_TEXT[lang].cardinals;
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
   const normalized = (angle + 360) % 360;
-  if (normalized >= 337.5 || normalized < 22.5) return 'E';
-  if (normalized < 67.5) return 'SE';
-  if (normalized < 112.5) return 'S';
-  if (normalized < 157.5) return 'SO';
-  if (normalized < 202.5) return 'O';
-  if (normalized < 247.5) return 'NO';
-  if (normalized < 292.5) return 'N';
-  return 'NE';
+  if (normalized >= 337.5 || normalized < 22.5) return cardinals[0];
+  if (normalized < 67.5) return cardinals[1];
+  if (normalized < 112.5) return cardinals[2];
+  if (normalized < 157.5) return cardinals[3];
+  if (normalized < 202.5) return cardinals[4];
+  if (normalized < 247.5) return cardinals[5];
+  if (normalized < 292.5) return cardinals[6];
+  return cardinals[7];
 }
 
 export const RadarPanel: React.FC<RadarPanelProps> = ({
   planet,
+  lang,
   shipRef,
   objects,
   crystals,
@@ -43,10 +47,12 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
   const objectsRef = useRef(objects);
   const crystalsRef = useRef(crystals);
   const planetRef = useRef(planet);
+  const langRef = useRef(lang);
 
   objectsRef.current = objects;
   crystalsRef.current = crystals;
   planetRef.current = planet;
+  langRef.current = lang;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -177,15 +183,16 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
       drawCrayonCircle(ctx, cx, cy, radius, primaryStroke, 2.6, 9.1, 1.8);
 
       // Hand-lettered cardinal letters along outer crayon margin
+      const cards = UI_TEXT[langRef.current].canvasCardinals;
       ctx.save();
       ctx.font = '700 11px "Patrick Hand", sans-serif';
       ctx.fillStyle = isMoon ? '#BAE6FD' : '#FEF08A';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('N', cx, 6);
-      ctx.fillText('S', cx, size - 6);
-      ctx.fillText('O', 6, cy);
-      ctx.fillText('E', size - 6, cy);
+      ctx.fillText(cards.n, cx, 6);
+      ctx.fillText(cards.s, cx, size - 6);
+      ctx.fillText(cards.w, 6, cy);
+      ctx.fillText(cards.e, size - 6, cy);
       ctx.restore();
 
       animId = requestAnimationFrame(renderRadar);
@@ -201,10 +208,13 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
     const dx = obj.x - shipCoords.x;
     const dy = obj.y - shipCoords.y;
     const dist = Math.round(Math.hypot(dx, dy));
+    const localized = getLocalizedObjectCopy(obj, lang);
     return {
       ...obj,
+      name: localized.name,
+      sector: localized.sector,
       dist,
-      bearing: getCardinalBearing(dx, dy),
+      bearing: getCardinalBearing(dx, dy, lang),
       isActive: idx === activeIndex,
       isQueued: !obj.discovered && activeIndex !== -1 && idx > activeIndex,
     };
@@ -212,6 +222,8 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
 
   const activeTarget = activeIndex >= 0 ? objectsWithDistance[activeIndex] : null;
   const boxTone = planet.id === 'moon' ? 'crayon-box-moon' : 'crayon-box-mars';
+  const t = UI_TEXT[lang];
+  const localizedPlanetName = getPlanetDisplayName(planet.id, lang);
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -223,11 +235,11 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
             }`}
           />
           <h2 className="font-crayon text-lg font-bold tracking-wide text-slate-100">
-            Radar de Rescate
+            {t.radarTitle}
           </h2>
         </div>
         <span className="font-mono-tabular text-xs text-slate-300">
-          {objects.filter((o) => o.discovered).length}/4 rescatados
+          {t.radarRescued(objects.filter((o) => o.discovered).length, objects.length)}
         </span>
       </div>
 
@@ -239,14 +251,14 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
             width={162}
             height={162}
             className="block rounded-full"
-            aria-label="Radar táctico estilo crayola mostrando la posición de la nave y el objetivo activo"
+            aria-label={t.radarTitle}
           />
         </div>
 
         <div className="min-w-0 flex-1 flex flex-col gap-2">
           <div>
             <div className="font-crayon text-xs text-slate-400">
-              Posición actual
+              {t.currentPos}
             </div>
             <div className="font-mono-tabular text-xs text-slate-100 mt-0.5">
               X:{Math.round(shipCoords.x)} · Y:{Math.round(shipCoords.y)}
@@ -258,7 +270,7 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
           {activeTarget ? (
             <div>
               <div className="font-crayon text-xs text-slate-400">
-                Objetivo activo ({activeIndex + 1}/4)
+                {t.activeTarget(activeIndex + 1, objects.length)}
               </div>
               <div className="font-crayon text-sm font-bold text-slate-50 truncate mt-0.5">
                 {activeTarget.name}
@@ -270,17 +282,17 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
               >
                 <Compass className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  {activeTarget.dist} m · Rumbo {activeTarget.bearing}
+                  {activeTarget.dist} m · {t.bearing} {activeTarget.bearing}
                 </span>
               </div>
             </div>
           ) : (
             <div>
               <div className="font-crayon text-sm font-bold text-emerald-300">
-                Barrido completado
+                {t.sweepComplete}
               </div>
               <div className="text-xs text-slate-300 mt-0.5">
-                Todas las señales de {planet.name} han sido recuperadas.
+                {t.sweepCompleteDesc(localizedPlanetName)}
               </div>
             </div>
           )}
@@ -318,12 +330,12 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
                       : 'text-slate-400'
                   }`}
                 >
-                  {obj.isQueued ? 'Señal por confirmar' : obj.name}
+                  {obj.isQueued ? t.unconfirmedSignal : obj.name}
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 truncate pl-5 mt-0.5">
                 {obj.isQueued
-                  ? 'Aparecerá al recoger el objeto actual'
+                  ? t.appearsNextDesc
                   : `${obj.sector} · ${obj.frequency}`}
               </div>
             </div>
@@ -331,14 +343,14 @@ export const RadarPanel: React.FC<RadarPanelProps> = ({
             <div className="shrink-0 text-right font-mono-tabular">
               {obj.discovered ? (
                 <span className="font-crayon text-xs font-semibold text-emerald-300">
-                  Rescatado
+                  {t.rescuedBadge}
                 </span>
               ) : obj.isActive ? (
                 <span className="text-[11px] text-slate-100 font-semibold">
                   {obj.dist} m {obj.bearing}
                 </span>
               ) : (
-                <span className="font-crayon text-xs text-slate-500">En espera</span>
+                <span className="font-crayon text-xs text-slate-500">{t.standbyBadge}</span>
               )}
             </div>
           </div>

@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   Fuel,
+  Languages,
   Pause,
   Play,
   Radio,
@@ -31,6 +32,7 @@ import {
 import {
   CrystalNode,
   GamePhase,
+  Language,
   LogEntry,
   PlanetId,
   RescueObject,
@@ -39,8 +41,15 @@ import {
   TransitionState,
 } from './types/game';
 import { soundEngine } from './utils/audio';
+import {
+  getLocalizedObjectCopy,
+  getPlanetDisplayName,
+  getPlanetSectorName,
+  LANG_STORAGE_KEY,
+  UI_TEXT,
+} from './utils/i18n';
 
-const STORAGE_KEY = 'horizonte_orbital_save_v6';
+const STORAGE_KEY = 'horizonte_orbital_save_v7';
 
 interface SavedState {
   planetId: PlanetId;
@@ -70,37 +79,72 @@ function createFreshState(startPlanet: PlanetId = 'moon'): SavedState {
 
 function loadSavedState(): SavedState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedState;
-    if (
-      !parsed.objectsByPlanet?.moon?.[0]?.orbitRadiusX ||
-      !parsed.objectsByPlanet?.mars?.[0]?.orbitRadiusX
-    ) {
-      return null;
-    }
+    const rawV7 = localStorage.getItem(STORAGE_KEY);
+    if (rawV7) {
+      const parsed = JSON.parse(rawV7) as SavedState;
+      if (
+        !parsed.objectsByPlanet?.moon?.[0]?.orbitRadiusX ||
+        !parsed.objectsByPlanet?.mars?.[0]?.orbitRadiusX ||
+        parsed.objectsByPlanet.moon.length !== INITIAL_RESCUE_OBJECTS.moon.length ||
+        parsed.objectsByPlanet.mars.length !== INITIAL_RESCUE_OBJECTS.mars.length
+      ) {
+        return null;
+      }
 
-    // Ensure saved fuel nodes match scarce count & keep orbital radii updated
-    if (parsed.crystalsByPlanet?.moon?.length !== FUEL_NODE_COUNT) {
-      parsed.crystalsByPlanet = {
-        moon: generatePlanetCrystals('moon'),
-        mars: generatePlanetCrystals('mars'),
-      };
-    }
-    (['moon', 'mars'] as PlanetId[]).forEach((pid) => {
-      parsed.objectsByPlanet[pid] = parsed.objectsByPlanet[pid].map((obj, idx) => {
-        const template = INITIAL_RESCUE_OBJECTS[pid][idx];
-        if (!template || obj.discovered) return obj;
-        return {
-          ...obj,
-          orbitRadiusX: template.orbitRadiusX,
-          orbitRadiusY: template.orbitRadiusY,
-          orbitSpeed: template.orbitSpeed,
+      if (parsed.crystalsByPlanet?.moon?.length !== FUEL_NODE_COUNT) {
+        parsed.crystalsByPlanet = {
+          moon: generatePlanetCrystals('moon'),
+          mars: generatePlanetCrystals('mars'),
         };
+      }
+      (['moon', 'mars'] as PlanetId[]).forEach((pid) => {
+        parsed.objectsByPlanet[pid] = parsed.objectsByPlanet[pid].map((obj, idx) => {
+          const template = INITIAL_RESCUE_OBJECTS[pid][idx];
+          if (!template || obj.discovered) return obj;
+          return {
+            ...obj,
+            orbitRadiusX: template.orbitRadiusX,
+            orbitRadiusY: template.orbitRadiusY,
+            orbitSpeed: template.orbitSpeed,
+          };
+        });
       });
-    });
 
-    return parsed;
+      return parsed;
+    }
+
+    // Migrate previous v6 save seamlessly (keep Moon progress & active planet, load 9 Mars targets)
+    const rawV6 = localStorage.getItem('horizonte_orbital_save_v6');
+    if (!rawV6) return null;
+    const prev = JSON.parse(rawV6) as SavedState;
+    if (!prev.objectsByPlanet?.moon?.[0]?.orbitRadiusX) return null;
+
+    return {
+      planetId: prev.planetId ?? 'moon',
+      score: prev.score ?? 0,
+      objectsByPlanet: {
+        moon: prev.objectsByPlanet.moon.map((obj, idx) => {
+          const template = INITIAL_RESCUE_OBJECTS.moon[idx];
+          if (!template || obj.discovered) return obj;
+          return {
+            ...obj,
+            orbitRadiusX: template.orbitRadiusX,
+            orbitRadiusY: template.orbitRadiusY,
+            orbitSpeed: template.orbitSpeed,
+          };
+        }),
+        mars: INITIAL_RESCUE_OBJECTS.mars.map((o) => ({ ...o })),
+      },
+      crystalsByPlanet:
+        prev.crystalsByPlanet?.moon?.length === FUEL_NODE_COUNT
+          ? prev.crystalsByPlanet
+          : {
+              moon: generatePlanetCrystals('moon'),
+              mars: generatePlanetCrystals('mars'),
+            },
+      logEntries: (prev.logEntries ?? []).filter((e) => e.planet === 'moon'),
+      allCompletedShown: false,
+    };
   } catch {
     return null;
   }
@@ -129,6 +173,15 @@ export default function App() {
   const [allCompletedShown, setAllCompletedShown] = useState<boolean>(
     saved?.allCompletedShown ?? false
   );
+
+  const [lang, setLang] = useState<Language>(() => {
+    try {
+      return localStorage.getItem(LANG_STORAGE_KEY) === 'en' ? 'en' : 'es';
+    } catch {
+      return 'es';
+    }
+  });
+  const t = UI_TEXT[lang];
 
   const [sidebarTab, setSidebarTab] = useState<'radar' | 'logbook'>('radar');
   const [muted, setMuted] = useState<boolean>(false);
@@ -166,11 +219,30 @@ export default function App() {
   const currentObjects = objectsByPlanet[planetId];
   const currentCrystals = crystalsByPlanet[planetId];
 
+  const moonTotal = objectsByPlanet.moon.length;
+  const marsTotal = objectsByPlanet.mars.length;
+  const totalCurrentObjects = currentObjects.length;
+  const totalObjectsCount = moonTotal + marsTotal;
   const rescuedCountCurrent = currentObjects.filter((o) => o.discovered).length;
   const totalRescued =
     objectsByPlanet.moon.filter((o) => o.discovered).length +
     objectsByPlanet.mars.filter((o) => o.discovered).length;
-  const currentMissionComplete = rescuedCountCurrent === 4;
+  const currentMissionComplete = rescuedCountCurrent === totalCurrentObjects;
+  const activePlanetName = getPlanetDisplayName(planetId, lang);
+  const activePlanetSector = getPlanetSectorName(planetId, lang);
+  const targetPlanetName = getPlanetDisplayName(activePlanet.targetPlanetId, lang);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANG_STORAGE_KEY, lang);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [lang]);
+
+  const handleToggleLanguage = () => {
+    setLang((prev) => (prev === 'es' ? 'en' : 'es'));
+  };
 
   // Persist progress to localStorage
   useEffect(() => {
@@ -225,10 +297,10 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [phase, planetId, currentCrystals]);
 
-  // Trigger ALL_COMPLETED celebration once all 8 objects are rescued
+  // Trigger ALL_COMPLETED celebration once all objects across Moon & Mars are rescued
   useEffect(() => {
     if (
-      totalRescued === 8 &&
+      totalRescued === totalObjectsCount &&
       !allCompletedShown &&
       phase === 'PLAYING'
     ) {
@@ -238,7 +310,7 @@ export default function App() {
       }, 1200);
       return () => window.clearTimeout(timer);
     }
-  }, [totalRescued, allCompletedShown, phase]);
+  }, [totalRescued, totalObjectsCount, allCompletedShown, phase]);
 
   // Start looping background soundtrack upon first user interaction (respecting browser autoplay rules)
   useEffect(() => {
@@ -502,11 +574,14 @@ export default function App() {
       shipRef.current.hull = repaired;
       setHull(repaired);
 
+      const localizedObj = getLocalizedObjectCopy(targetObj, lang);
+
       setToast({
         id: newEntry.id,
-        title: `${targetObj.name} · Información recibida`,
-        subtitle: targetObj.transmissionTitle,
-        reading: targetObj.telemetryReading,
+        objectId: targetObj.id,
+        title: `${localizedObj.name} · ${UI_TEXT[lang].dataReceivedSuffix}`,
+        subtitle: localizedObj.transmissionTitle,
+        reading: localizedObj.telemetryReading,
         points: targetObj.points,
         planet: planetId,
       });
@@ -522,7 +597,7 @@ export default function App() {
         setPhase('STORY_POPUP');
       }
     },
-    [objectsByPlanet, planetId]
+    [objectsByPlanet, planetId, lang]
   );
 
   const handleShipDamaged = useCallback((remainingHull: number) => {
@@ -545,18 +620,25 @@ export default function App() {
     []
   );
 
-  const handleLaunchToTargetPlanet = () => {
-    if (!currentMissionComplete || phase !== 'PLAYING') return;
+  const handleSwitchPlanet = () => {
+    if (phase !== 'PLAYING' && phase !== 'PAUSED') return;
     const destination = activePlanet.targetPlanetId;
+    soundEngine.ensureMusicPlaying();
     soundEngine.playLaunchSequence();
     setToast(null);
+    setSidebarTab((tab) => (tab === 'logbook' ? 'radar' : tab));
     setTransitionState({
       fromPlanet: planetId,
       toPlanet: destination,
       progress: 0,
-      stageLabel: `Despegando de ${activePlanet.name}`,
+      stageLabel: UI_TEXT[lang].stageTakeoff(getPlanetDisplayName(planetId, lang)),
     });
     setPhase('TAKEOFF_TRANSITION');
+  };
+
+  const handleLaunchToTargetPlanet = () => {
+    if (!currentMissionComplete || phase !== 'PLAYING') return;
+    handleSwitchPlanet();
   };
 
   const handleTransitionProgress = useCallback(
@@ -597,7 +679,7 @@ export default function App() {
       <header className="h-14 shrink-0 border-b border-slate-800/90 bg-[#0B0F17] px-4 lg:px-6 flex items-center justify-between gap-6">
         {/* Zone 1: Brand Title */}
         <div className="font-display text-lg font-bold tracking-wide text-slate-50 whitespace-nowrap shrink-0">
-          Horizonte Orbital
+          {t.brandTitle}
         </div>
 
         {/* Zone 2: Clean Unboxed Live Mission Metrics */}
@@ -607,49 +689,80 @@ export default function App() {
               planetId === 'moon' ? 'text-cyan-400' : 'text-amber-400'
             }`}
           >
-            {activePlanet.name}
+            {activePlanetName}
           </span>
           <span aria-hidden="true">·</span>
           <span className="font-mono-tabular text-slate-200">
-            Puntos: {score.toLocaleString('es-MX')}
+            {t.scoreLabel}: {score.toLocaleString(lang === 'en' ? 'en-US' : 'es-MX')}
           </span>
           <span aria-hidden="true">·</span>
           <span className="font-mono-tabular text-slate-200">
-            Rescatados: {rescuedCountCurrent}/4
+            {t.rescuedLabel}: {rescuedCountCurrent}/{totalCurrentObjects}
           </span>
           <span aria-hidden="true" className="hidden md:inline">
             ·
           </span>
           <span className="hidden md:inline font-mono-tabular text-slate-400">
-            Bitácora: {totalRescued}/8
+            {t.logbookLabel}: {totalRescued}/{totalObjectsCount}
           </span>
         </div>
 
         {/* Zone 3: Actions */}
         <div className="flex items-center gap-2.5 shrink-0">
           {(phase === 'PLAYING' || phase === 'PAUSED') && (
-            <button
-              type="button"
-              onClick={handleTogglePause}
-              className={`crayon-btn inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                phase === 'PAUSED' ? 'crayon-btn-emerald' : 'crayon-btn-cyan'
-              }`}
-              aria-label={phase === 'PAUSED' ? 'Reanudar misión' : 'Pausar misión'}
-            >
-              {phase === 'PAUSED' ? (
-                <Play className="w-3.5 h-3.5" />
-              ) : (
-                <Pause className="w-3.5 h-3.5" />
-              )}
-              <span>{phase === 'PAUSED' ? 'Reanudar' : 'Pausa'}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleSwitchPlanet}
+                className={`crayon-btn inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                  activePlanet.targetPlanetId === 'mars'
+                    ? 'crayon-btn-amber'
+                    : 'crayon-btn-cyan'
+                }`}
+                aria-label={t.switchPlanetAria(targetPlanetName)}
+                title={t.switchPlanetAria(targetPlanetName)}
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span>
+                  <span className="hidden md:inline">{t.switchToPrefix} </span>
+                  {targetPlanetName}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTogglePause}
+                className={`crayon-btn inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                  phase === 'PAUSED' ? 'crayon-btn-emerald' : 'crayon-btn-cyan'
+                }`}
+                aria-label={phase === 'PAUSED' ? t.resumeAria : t.pauseAria}
+              >
+                {phase === 'PAUSED' ? (
+                  <Play className="w-3.5 h-3.5" />
+                ) : (
+                  <Pause className="w-3.5 h-3.5" />
+                )}
+                <span>{phase === 'PAUSED' ? t.resume : t.pause}</span>
+              </button>
+            </>
           )}
+
+          <button
+            type="button"
+            onClick={handleToggleLanguage}
+            className="crayon-btn crayon-btn-dark inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
+            aria-label={t.langSwitchTitle}
+            title={t.langSwitchTitle}
+          >
+            <Languages className="w-3.5 h-3.5" />
+            <span>{t.langSwitchLabel}</span>
+          </button>
 
           <button
             type="button"
             onClick={handleToggleMute}
             className="crayon-btn crayon-btn-dark inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
-            aria-label={muted ? 'Activar audio' : 'Silenciar audio'}
+            aria-label={muted ? t.unmuteAria : t.muteAria}
           >
             {muted ? (
               <VolumeX className="w-3.5 h-3.5" />
@@ -657,7 +770,7 @@ export default function App() {
               <Volume2 className="w-3.5 h-3.5" />
             )}
             <span className="hidden sm:inline">
-              {muted ? 'Silenciado' : 'Audio'}
+              {muted ? t.muted : t.audio}
             </span>
           </button>
 
@@ -667,7 +780,7 @@ export default function App() {
             className="crayon-btn crayon-btn-amber inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reiniciar</span>
+            <span>{t.reset}</span>
           </button>
         </div>
       </header>
@@ -679,6 +792,7 @@ export default function App() {
           <GameCanvas
             planet={activePlanet}
             phase={phase}
+            lang={lang}
             shipRef={shipRef}
             objects={currentObjects}
             crystals={currentCrystals}
@@ -697,10 +811,10 @@ export default function App() {
             <div className="pointer-events-none absolute top-3 left-3 flex flex-col gap-2">
               <div className="bg-[#0B0F17]/90 border border-slate-800/90 rounded-lg px-3 py-2 backdrop-blur-xs">
                 <div className="text-xs font-semibold text-slate-100">
-                  {activePlanet.name} · {activePlanet.sectorName}
+                  {activePlanetName} · {activePlanetSector}
                 </div>
                 <div className="font-mono-tabular text-[11px] text-slate-400 mt-0.5">
-                  Gravedad {activePlanet.gravityLabel} · Temp{' '}
+                  {t.gravity} {activePlanet.gravityLabel} · {t.temp}{' '}
                   {activePlanet.surfaceTemp}
                 </div>
                 <div className="mt-2 flex items-center gap-2">
@@ -779,47 +893,67 @@ export default function App() {
               <Fuel className="w-4 h-4 text-amber-400 shrink-0" />
               <span className="font-mono-tabular text-xs font-semibold tracking-wide">
                 {boostEnergy <= 0
-                  ? '¡Sin gasolina! Motores apagados'
-                  : `¡Gasolina baja (${Math.round(boostEnergy)}%)! Recoge los tanques verdes`}
+                  ? t.outOfGasBanner
+                  : t.lowGasBanner(Math.round(boostEnergy))}
               </span>
             </div>
           )}
 
           {/* Incoming Telemetry Data Toast */}
-          {toast && phase === 'PLAYING' && (
-            <div className="absolute top-3 right-3 max-w-sm bg-[#0E131D]/95 border border-emerald-500/40 rounded-lg p-3.5 shadow-lg">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{toast.title}</span>
+          {toast &&
+            phase === 'PLAYING' &&
+            (() => {
+              const matchedObj = toast.objectId
+                ? objectsByPlanet[toast.planet].find((o) => o.id === toast.objectId)
+                : undefined;
+              const localized = matchedObj
+                ? getLocalizedObjectCopy(matchedObj, lang)
+                : null;
+              const toastTitle = localized
+                ? `${localized.name} · ${t.dataReceivedSuffix}`
+                : toast.title;
+              const toastSubtitle = localized
+                ? localized.transmissionTitle
+                : toast.subtitle;
+              const toastReading = localized
+                ? localized.telemetryReading
+                : toast.reading;
+
+              return (
+                <div className="absolute top-3 right-3 max-w-sm bg-[#0E131D]/95 border border-emerald-500/40 rounded-lg p-3.5 shadow-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>{toastTitle}</span>
+                    </div>
+                    <span className="font-mono-tabular text-xs font-semibold text-emerald-300 shrink-0">
+                      +{toast.points} pts
+                    </span>
+                  </div>
+                  <div className="text-xs font-medium text-slate-100 mt-1">
+                    {toastSubtitle}
+                  </div>
+                  <div className="font-mono-tabular text-[11px] text-slate-400 mt-1">
+                    {toastReading}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSelectSidebarTab('logbook');
+                      setToast(null);
+                    }}
+                    className="crayon-btn crayon-btn-cyan mt-2.5 inline-flex items-center px-3.5 py-1 text-sm font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    {t.viewInLogbook}
+                  </button>
                 </div>
-                <span className="font-mono-tabular text-xs font-semibold text-emerald-300 shrink-0">
-                  +{toast.points} pts
-                </span>
-              </div>
-              <div className="text-xs font-medium text-slate-100 mt-1">
-                {toast.subtitle}
-              </div>
-              <div className="font-mono-tabular text-[11px] text-slate-400 mt-1">
-                {toast.reading}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  handleSelectSidebarTab('logbook');
-                  setToast(null);
-                }}
-                className="crayon-btn crayon-btn-cyan mt-2.5 inline-flex items-center px-3.5 py-1 text-sm font-bold whitespace-nowrap cursor-pointer"
-              >
-                Ver registro en Bitácora
-              </button>
-            </div>
-          )}
+              );
+            })()}
 
           {/* Bottom-Left Controls Hint */}
           {phase === 'PLAYING' && !currentMissionComplete && (
             <div className="pointer-events-none hidden sm:block absolute bottom-3 left-3 bg-[#0B0F17]/85 border border-slate-800/80 rounded-md px-3 py-1.5 text-[11px] text-slate-300">
-              WASD o Flechas para volar · Espacio para turbo · Recoge tanques verdes de gasolina
+              {t.controlsHint}
             </div>
           )}
 
@@ -827,6 +961,7 @@ export default function App() {
           {phase === 'PLAYING' && (
             <ProbeMinimap
               planet={activePlanet}
+              lang={lang}
               shipRef={shipRef}
               objects={currentObjects}
               crystals={currentCrystals}
@@ -838,11 +973,10 @@ export default function App() {
             <div className="crayon-box crayon-box-slate absolute bottom-3 left-3 w-[calc(100%-224px)] max-w-md p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl">
               <div className="min-w-0 text-center sm:text-left">
                 <div className="text-xs font-semibold text-emerald-400">
-                  Misión en {activePlanet.name} completada (4/4 objetos)
+                  {t.missionCompleted(activePlanetName, totalCurrentObjects)}
                 </div>
                 <div className="text-xs text-slate-300 mt-0.5">
-                  Propulsores listos para despegar hacia{' '}
-                  {activePlanet.targetPlanetName}.
+                  {t.thrustersReady(targetPlanetName)}
                 </div>
               </div>
               <button
@@ -855,7 +989,7 @@ export default function App() {
                 }`}
               >
                 <Rocket className="w-4 h-4" />
-                <span>Despegar hacia {activePlanet.targetPlanetName}</span>
+                <span>{t.launchTo(targetPlanetName)}</span>
               </button>
             </div>
           )}
@@ -881,8 +1015,12 @@ export default function App() {
                   />
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 font-mono-tabular">
-                  <span>Origen: {PLANETS[transitionState.fromPlanet].name}</span>
-                  <span>Destino: {PLANETS[transitionState.toPlanet].name}</span>
+                  <span>
+                    {t.origin}: {getPlanetDisplayName(transitionState.fromPlanet, lang)}
+                  </span>
+                  <span>
+                    {t.destination}: {getPlanetDisplayName(transitionState.toPlanet, lang)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -894,20 +1032,20 @@ export default function App() {
               <div className="w-full max-w-lg bg-[#0E131D] border border-slate-800 rounded-xl p-6 flex flex-col gap-5">
                 <div>
                   <div className="text-xs font-medium text-cyan-400">
-                    Exploración y Rescate de Datos
+                    {t.menuKicker}
                   </div>
                   <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 mt-1 text-balance">
-                    Horizonte Orbital
+                    {t.brandTitle}
                   </h1>
                   <p className="text-sm text-slate-300 leading-relaxed mt-2">
-                    Pilota tu nave espacial sobre la superficie planetaria, vigila tu nivel de gasolina recogiendo tanques verdes en el mapa y localiza los 4 objetos científicos en orden para transmitir su información hacia tu bitácora.
+                    {t.menuDesc}
                   </p>
                 </div>
 
                 {/* Starting Planet Selector */}
                 <div className="flex flex-col gap-2">
                   <div className="text-xs font-medium text-slate-400">
-                    Elige tu destino inicial
+                    {t.chooseStart}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <button
@@ -920,7 +1058,7 @@ export default function App() {
                       }`}
                     >
                       <div className="font-crayon text-lg font-bold">
-                        La Luna
+                        {getPlanetDisplayName('moon', lang)}
                       </div>
                       <div
                         className={`font-sans text-xs mt-0.5 ${
@@ -929,7 +1067,7 @@ export default function App() {
                             : 'text-slate-300'
                         }`}
                       >
-                        Mare Tranquillitatis · 4 objetos
+                        {getPlanetSectorName('moon', lang)} · {t.objectsCountLabel(moonTotal)}
                       </div>
                     </button>
 
@@ -943,7 +1081,7 @@ export default function App() {
                       }`}
                     >
                       <div className="font-crayon text-lg font-bold">
-                        Marte
+                        {getPlanetDisplayName('mars', lang)}
                       </div>
                       <div
                         className={`font-sans text-xs mt-0.5 ${
@@ -952,18 +1090,18 @@ export default function App() {
                             : 'text-slate-300'
                         }`}
                       >
-                        Cráter Jezero · 4 objetos
+                        {getPlanetSectorName('mars', lang)} · {t.objectsCountLabel(marsTotal)}
                       </div>
                     </button>
                   </div>
                 </div>
 
                 <div className="text-xs text-slate-400 border-t border-slate-800/80 pt-3 flex flex-wrap gap-x-3 gap-y-1">
-                  <span>Controles: WASD / Flechas</span>
+                  <span>{t.menuControls[0]}</span>
                   <span aria-hidden="true">·</span>
-                  <span>Clic sostenido para volar</span>
+                  <span>{t.menuControls[1]}</span>
                   <span aria-hidden="true">·</span>
-                  <span>Espacio: Propulsor</span>
+                  <span>{t.menuControls[2]}</span>
                 </div>
 
                 <button
@@ -971,17 +1109,18 @@ export default function App() {
                   onClick={handleStartMission}
                   className="crayon-btn crayon-btn-cyan w-full py-3 px-4 font-bold text-base cursor-pointer"
                 >
-                  Comenzar Misión
+                  {t.startMission}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Story / Archival Discovery Popup (pure transparent image + Salir button) */}
+          {/* Story / Archival Discovery Popup (pure transparent image + Salir/Exit button) */}
           {phase === 'STORY_POPUP' && storyPopup && (
             <StoryPopupModal
               imageUrl={storyPopup.imageUrl}
               alt={storyPopup.title}
+              lang={lang}
               onExit={handleContinueFromStory}
             />
           )}
@@ -995,17 +1134,17 @@ export default function App() {
                     <Pause className="w-4 h-4 shrink-0" />
                     <span>
                       {sidebarTab === 'logbook'
-                        ? 'Bitácora Abierta · Juego en Pausa'
-                        : 'Nave Detenida · Pausa Activa'}
+                        ? t.pausedFromLogbook
+                        : t.pausedManual}
                     </span>
                   </div>
                   <h2 className="font-crayon text-3xl font-bold text-slate-50 mt-1">
-                    Misión en Pausa
+                    {t.pausedTitle}
                   </h2>
                   <p className="text-sm text-slate-300 leading-relaxed mt-1.5">
                     {sidebarTab === 'logbook'
-                      ? 'El vuelo, los meteoritos y el consumo de gasolina se pausaron automáticamente mientras revisas la bitácora.'
-                      : 'Los motores, los asteroides y el consumo de gasolina están detenidos hasta que reanudes la misión.'}
+                      ? t.pausedLogbookDesc
+                      : t.pausedManualDesc}
                   </p>
                 </div>
 
@@ -1016,14 +1155,14 @@ export default function App() {
                     className="crayon-btn crayon-btn-emerald flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
                     <Play className="w-4 h-4" />
-                    <span>Reanudar</span>
+                    <span>{t.resume}</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
                     className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Reiniciar Misión
+                    {t.resetMission}
                   </button>
                 </div>
               </div>
@@ -1037,13 +1176,13 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 text-xs font-semibold text-red-400">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>Impacto de Asteroide · Casco Crítico</span>
+                    <span>{t.hullKicker}</span>
                   </div>
                   <h2 className="font-display text-2xl font-bold text-slate-50 mt-1">
-                    Nave Averiada
+                    {t.hullTitle}
                   </h2>
                   <p className="text-sm text-slate-300 leading-relaxed mt-2">
-                    Los asteroides de alta velocidad superaron la integridad del casco. Tus datos rescatados en la bitácora siguen a salvo.
+                    {t.hullDesc}
                   </p>
                 </div>
 
@@ -1053,14 +1192,14 @@ export default function App() {
                     onClick={handleRepairAndRespawn}
                     className="crayon-btn crayon-btn-cyan flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Reparar y Relanzar
+                    {t.repairAndRelaunch}
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
                     className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Reiniciar Misión
+                    {t.resetMission}
                   </button>
                 </div>
               </div>
@@ -1074,13 +1213,13 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
                     <Fuel className="w-4 h-4 shrink-0" />
-                    <span>Tanque Vacío · Propulsión Detenida</span>
+                    <span>{t.fuelKicker}</span>
                   </div>
                   <h2 className="font-display text-2xl font-bold text-slate-50 mt-1">
-                    Sin Gasolina
+                    {t.fuelTitle}
                   </h2>
                   <p className="text-sm text-slate-300 leading-relaxed mt-2">
-                    El movimiento de la nave consumió toda la gasolina disponible. Recoge los tanques verdes dispersos antes de que el medidor llegue a cero. Tus objetos rescatados siguen en la bitácora.
+                    {t.fuelDesc}
                   </p>
                 </div>
 
@@ -1090,14 +1229,14 @@ export default function App() {
                     onClick={handleRepairAndRespawn}
                     className="crayon-btn crayon-btn-emerald flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Reabastecer y Relanzar
+                    {t.refuelAndRelaunch}
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
                     className="crayon-btn crayon-btn-dark py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Reiniciar Misión
+                    {t.resetMission}
                   </button>
                 </div>
               </div>
@@ -1110,27 +1249,27 @@ export default function App() {
               <div className="w-full max-w-md bg-[#0E131D] border border-emerald-500/40 rounded-xl p-6 flex flex-col gap-4">
                 <div>
                   <div className="text-xs font-semibold text-emerald-400">
-                    Misión Interplanetaria Completada
+                    {t.allKicker}
                   </div>
                   <h2 className="font-display text-2xl font-bold text-slate-50 mt-1">
-                    Todos los datos rescatados
+                    {t.allTitle}
                   </h2>
                   <p className="text-sm text-slate-300 leading-relaxed mt-2">
-                    Has recuperado exitosamente la información de los 4 objetos de La Luna y los 4 objetos de Marte. Todos los reportes científicos están archivados en tu bitácora.
+                    {t.allDesc(moonTotal, marsTotal)}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 bg-[#0B0F17] border border-slate-800 rounded-lg p-3.5">
                   <div>
-                    <div className="text-xs text-slate-400">Puntuación Final</div>
+                    <div className="text-xs text-slate-400">{t.finalScore}</div>
                     <div className="font-mono-tabular text-xl font-bold text-slate-50 mt-0.5">
-                      {score.toLocaleString('es-MX')}
+                      {score.toLocaleString(lang === 'en' ? 'en-US' : 'es-MX')}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-400">Bitácora</div>
+                    <div className="text-xs text-slate-400">{t.logbookLabel}</div>
                     <div className="font-mono-tabular text-xl font-bold text-emerald-400 mt-0.5">
-                      {totalRescued}/8
+                      {totalRescued}/{totalObjectsCount}
                     </div>
                   </div>
                 </div>
@@ -1141,14 +1280,14 @@ export default function App() {
                     onClick={() => setPhase('PLAYING')}
                     className="crayon-btn crayon-btn-dark flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Seguir Explorando
+                    {t.keepExploring}
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMission}
                     className="crayon-btn crayon-btn-cyan flex-1 py-2.5 px-4 text-sm font-bold cursor-pointer"
                   >
-                    Nueva Misión
+                    {t.newMission}
                   </button>
                 </div>
               </div>
@@ -1173,7 +1312,7 @@ export default function App() {
                 }`}
               >
                 <Radio className="w-3.5 h-3.5" />
-                <span>Radar ({rescuedCountCurrent}/4)</span>
+                <span>{t.tabRadar} ({rescuedCountCurrent}/{totalCurrentObjects})</span>
               </button>
               <button
                 type="button"
@@ -1185,7 +1324,7 @@ export default function App() {
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>Bitácora ({logEntries.length})</span>
+                <span>{t.tabLogbook} ({logEntries.length})</span>
               </button>
             </div>
           </div>
@@ -1196,6 +1335,7 @@ export default function App() {
               <>
                 <RadarPanel
                   planet={activePlanet}
+                  lang={lang}
                   shipRef={shipRef}
                   objects={currentObjects}
                   crystals={currentCrystals}
@@ -1206,7 +1346,7 @@ export default function App() {
                 <div className="crayon-box crayon-box-slate p-3.5 flex flex-col gap-2.5 mt-auto">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-crayon text-base font-bold text-slate-100">
-                      Propulsión Interplanetaria
+                      {t.interplanetaryPropulsion}
                     </span>
                     <span
                       className={`font-crayon text-xs font-bold ${
@@ -1215,14 +1355,14 @@ export default function App() {
                           : 'text-slate-400'
                       }`}
                     >
-                      {currentMissionComplete ? 'Desbloqueado' : 'Bloqueado'}
+                      {currentMissionComplete ? t.unlocked : t.locked}
                     </span>
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed">
                     {currentMissionComplete
-                      ? `Todos los objetos de ${activePlanet.name} fueron rescatados. Puedes despegar hacia ${activePlanet.targetPlanetName}.`
-                      : `Rescata los 4 objetos de ${activePlanet.name} para habilitar el despegue hacia ${activePlanet.targetPlanetName}.`}
+                      ? t.launchUnlockedDesc(activePlanetName, targetPlanetName)
+                      : t.launchLockedDesc(activePlanetName, targetPlanetName, totalCurrentObjects)}
                   </p>
 
                   <button
@@ -1238,13 +1378,14 @@ export default function App() {
                     }`}
                   >
                     <Rocket className="w-4 h-4" />
-                    <span>Despegar hacia {activePlanet.targetPlanetName}</span>
+                    <span>{t.launchTo(targetPlanetName)}</span>
                   </button>
                 </div>
               </>
             ) : (
               <LogbookPanel
                 activePlanetId={planetId}
+                lang={lang}
                 objectsByPlanet={objectsByPlanet}
                 entries={logEntries}
                 onOpenStoryImage={handleOpenStoryFromLogbook}
